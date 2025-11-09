@@ -2,10 +2,18 @@ import { Task, ITaskJSON } from './Task'
 
 // Simple in-memory store for tasks. For persistence, replace with FS/DB logic.
 export class TaskManager {
+    private static instance: TaskManager
     private tasks: Map<string, Task>
 
-    constructor() {
+    private constructor() {
         this.tasks = new Map()
+    }
+
+    static getInstance(): TaskManager {
+        if (!TaskManager.instance) {
+            TaskManager.instance = new TaskManager()
+        }
+        return TaskManager.instance
     }
 
     listTasks(): ITaskJSON[] {
@@ -38,4 +46,4 @@ export class TaskManager {
 }
 
 // Export a single instance (TaskManager singleton) to be used by main process
-export const taskManager = new TaskManager()
+export const taskManager = TaskManager.getInstance()
