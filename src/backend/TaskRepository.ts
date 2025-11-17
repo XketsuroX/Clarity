@@ -1,3 +1,5 @@
+import { Repository } from 'typeorm'
+import { AppDataSource } from './Database'
 import { Task, ITaskJSON } from './Task'
 
 /**
@@ -5,77 +7,76 @@ import { Task, ITaskJSON } from './Task'
  * This is a simple in-memory repository. Can be replaced with FS/DB logic later.
  */
 export class TaskRepository {
-    private tasks: Map<string, Task>
+    private ormRepository: Repository<Task>
 
     constructor() {
-        this.tasks = new Map()
+        this.ormRepository = AppDataSource.getRepository(Task)
     }
 
     /**
      * Get all tasks as JSON
      */
-    getAllTasks(): ITaskJSON[] {
-        return Array.from(this.tasks.values()).map((t) => t.toJSON())
+    async getAllTasks(): Promise<ITaskJSON[]> {
+        const tasks = await this.ormRepository.find()
+        return tasks.map((t) => t.toJSON())
     }
 
     /**
      * Get a single task by ID
      */
-    getTaskById(id: string): Task | null {
-        return this.tasks.get(id) || null
+    async getTaskById(id: string): Promise<Task | null> {
+        return this.ormRepository.findOneBy({ id })
     }
 
     /**
      * Get a single task as JSON by ID
      */
-    getTaskByIdJSON(id: string): ITaskJSON | null {
-        const task = this.tasks.get(id)
+    async getTaskByIdJSON(id: string): Promise<ITaskJSON | null> {
+        const task = await this.ormRepository.findOneBy({ id })
         return task ? task.toJSON() : null
     }
 
     /**
      * Add a new task
      */
-    addTask(task: Task): void {
-        this.tasks.set(task.id, task)
+    async addTask(task: Task): Promise<Task> {
+        return this.ormRepository.save(task)
     }
 
     /**
      * Update an existing task
      */
-    updateTask(id: string, task: Task): boolean {
-        if (!this.tasks.has(id)) {
-            return false
-        }
-        this.tasks.set(id, task)
-        return true
+    async updateTask(id: string, taskData: Partial<Task>): Promise<boolean> {
+        const result = await this.ormRepository.update(id, taskData)
+        return result.affected !== 0
     }
 
     /**
      * Remove a task by ID
      */
-    removeTask(id: string): boolean {
-        return this.tasks.delete(id)
+    async removeTask(id: string): Promise<boolean> {
+        const result = await this.ormRepository.delete(id)
+        return result.affected !== 0
     }
 
     /**
      * Check if a task exists
      */
-    existsTask(id: string): boolean {
-        return this.tasks.has(id)
+    async existsTask(id: string): Promise<boolean> {
+        return this.ormRepository.existsBy({ id })
     }
 
     /**
      * Get count of all tasks
      */
-    countTasks(): number {
-        return this.tasks.size
+    async countTasks(): Promise<number> {
+        return this.ormRepository.count()
     }
 
     /**
      * Clear all tasks
      */
-    clearTasks(): void {
-        this.tasks.clear()
+    async clearTasks(): Promise<void> {
+        await this.ormRepository.clear()
     }
 }

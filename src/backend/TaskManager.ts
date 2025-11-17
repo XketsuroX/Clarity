@@ -26,8 +26,8 @@ export class TaskManager {
         return TaskManager.instance
     }
 
-    listTasks(): ITaskJSON[] {
-        return this.taskRepository.getAllTasks()
+    async listTasks(): Promise<ITaskJSON[]> {
+        return await this.taskRepository.getAllTasks()
     }
 
     getCategories(): ICategoryJSON[] {
@@ -73,15 +73,15 @@ export class TaskManager {
     /**
      * Remove a task by ID
      */
-    removeTask(id: string): boolean {
-        return this.taskRepository.removeTask(id)
+    async removeTask(id: string): Promise<boolean> {
+        return await this.taskRepository.removeTask(id)
     }
 
     /**
      * Toggle task completion status
      */
-    toggleComplete(id: string): ITaskJSON | null {
-        const t = this.taskRepository.getTaskById(id)
+    async toggleComplete(id: string): Promise<ITaskJSON | null> {
+        const t = await this.taskRepository.getTaskById(id)
         if (!t) return null
         t.completed = !t.completed
         this.taskRepository.updateTask(id, t)
@@ -91,15 +91,15 @@ export class TaskManager {
     /**
      * Get a single task by ID
      */
-    getTask(id: string): ITaskJSON | null {
-        return this.taskRepository.getTaskByIdJSON(id)
+    async getTask(id: string): Promise<ITaskJSON | null> {
+        return await this.taskRepository.getTaskByIdJSON(id)
     }
 
     /**
      * Update task properties
      */
-    updateTask(id: string, updates: Partial<ITaskJSON>): ITaskJSON | null {
-        const task = this.taskRepository.getTaskById(id)
+    async updateTask(id: string, updates: Partial<ITaskJSON>): Promise<ITaskJSON | null> {
+        const task = await this.taskRepository.getTaskById(id)
         if (!task) return null
 
         // Apply updates
@@ -122,8 +122,8 @@ export class TaskManager {
     /**
      * Add a child task to a parent task
      */
-    addSubTask(parentTaskId: string, childTaskId: string): ITaskJSON | null {
-        const parent = this.taskRepository.getTaskById(parentTaskId)
+    async addSubTask(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
+        const parent = await this.taskRepository.getTaskById(parentTaskId)
         if (!parent) return null
 
         if (!parent.childrenTaskIds.includes(childTaskId)) {
@@ -137,8 +137,8 @@ export class TaskManager {
     /**
      * Remove a child task from a parent task
      */
-    removeSubTask(parentTaskId: string, childTaskId: string): ITaskJSON | null {
-        const parent = this.taskRepository.getTaskById(parentTaskId)
+    async removeSubTask(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
+        const parent = await this.taskRepository.getTaskById(parentTaskId)
         if (!parent) return null
 
         parent.childrenTaskIds = parent.childrenTaskIds.filter((id) => id !== childTaskId)
@@ -150,13 +150,15 @@ export class TaskManager {
     /**
      * Get all child tasks of a parent task
      */
-    getSubTasks(parentTaskId: string): ITaskJSON[] {
-        const parent = this.taskRepository.getTaskById(parentTaskId)
+    async getSubTasks(parentTaskId: string): Promise<ITaskJSON[]> {
+        const parent = await this.taskRepository.getTaskById(parentTaskId)
         if (!parent) return []
 
-        return parent.childrenTaskIds
-            .map((id) => this.taskRepository.getTaskByIdJSON(id))
-            .filter((t) => t !== null) as ITaskJSON[]
+        const subTaskPromises = parent.childrenTaskIds.map((id) =>
+            this.taskRepository.getTaskByIdJSON(id)
+        )
+        const resolvedSubTasks = await Promise.all(subTaskPromises)
+        return resolvedSubTasks.filter((t) => t !== null) as ITaskJSON[]
     }
 }
 
