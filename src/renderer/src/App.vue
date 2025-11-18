@@ -1,26 +1,97 @@
 <script setup lang="ts">
-import Versions from './components/Versions.vue'
+import { ref } from 'vue';
+import { ElMessage } from 'element-plus';
 
-const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+interface Task {
+	id: number;
+	text: string;
+	completed: boolean;
+}
+
+const tasks = ref<Task[]>([
+	{ id: 1, text: '學習 Vue 基礎', completed: true },
+	{ id: 2, text: '整合 Element Plus', completed: false },
+	{ id: 3, text: '休息一下', completed: false },
+]);
+
+const newTaskText = ref('');
+
+function addTask() {
+	if (newTaskText.value.trim() === '') {
+		ElMessage.warning('任務內容不能為空！');
+		return;
+	}
+	tasks.value.push({
+		id: Date.now(),
+		text: newTaskText.value,
+		completed: false,
+	});
+	newTaskText.value = '';
+}
+
+function removeTask(id: number): void {
+	tasks.value = tasks.value.filter((t) => t.id !== id);
+}
 </script>
 
 <template>
-  <img alt="logo" class="logo" src="./assets/electron.svg" />
-  <div class="creator">Powered by electron-vite</div>
-  <div class="text">
-    Build an Electron app with
-    <span class="vue">Vue</span>
-    and
-    <span class="ts">TypeScript</span>
-  </div>
-  <p class="tip">Please try pressing <code>F12</code> to open the devTool</p>
-  <div class="actions">
-    <div class="action">
-      <a href="https://electron-vite.org/" target="_blank" rel="noreferrer">Documentation</a>
-    </div>
-    <div class="action">
-      <a target="_blank" rel="noreferrer" @click="ipcHandle">Send IPC</a>
-    </div>
-  </div>
-  <Versions />
+	<div class="main-container">
+		<el-card class="box-card">
+			<template #header>
+				<div class="card-header">
+					<span>我的待辦事項</span>
+				</div>
+			</template>
+
+			<!-- 新增任務 -->
+			<el-row :gutter="10" class="add-task-row">
+				<el-col :span="18">
+					<el-input
+						v-model="newTaskText"
+						placeholder="新增一個任務..."
+						@keyup.enter="addTask"
+						clearable
+					/>
+				</el-col>
+				<el-col :span="6">
+					<el-button type="primary" @click="addTask" style="width: 100%">新增</el-button>
+				</el-col>
+			</el-row>
+
+			<!-- 任務列表 -->
+			<div v-for="task in tasks" :key="task.id" class="task-item">
+				<el-checkbox v-model="task.completed" :label="task.text" size="large" />
+				<el-button type="danger" @click="removeTask(task.id)" circle plain>X</el-button>
+			</div>
+		</el-card>
+	</div>
 </template>
+
+<style scoped>
+.main-container {
+	padding: 20px;
+	max-width: 600px;
+	margin: 40px auto;
+}
+.add-task-row {
+	margin-bottom: 20px;
+}
+.task-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 10px 0;
+	border-bottom: 1px solid #ebeef5;
+}
+.task-item:last-child {
+	border-bottom: none;
+}
+/* 讓已完成的任務有刪除線 */
+:deep(.el-checkbox__label) {
+	transition: color 0.2s;
+}
+:deep(.is-checked .el-checkbox__label) {
+	text-decoration: line-through;
+	color: #a8abb2;
+}
+</style>
