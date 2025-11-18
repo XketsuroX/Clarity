@@ -1,8 +1,8 @@
 import { DataSource } from 'typeorm';
 import { join } from 'path';
 import { app } from 'electron';
-import { Task } from '../backend/Task';
-import { Tag } from '../backend/Tag';
+import { Task } from './Task';
+import { Tag } from './Tag';
 
 export const AppDataSource = new DataSource({
     type: 'sqlite',
