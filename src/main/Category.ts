@@ -1,31 +1,31 @@
-import { Column, Entity, PrimaryColumn } from "typeorm"
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 export interface ICategoryJSON {
-    id: number
-    title: string
+	id: number;
+	title: string;
 }
 
 @Entity()
 export class Category {
-    @PrimaryColumn({ type: "int" })
-    id: number;
+	@PrimaryColumn({ type: 'int' })
+	id: number;
 
-    @Column({ type: "varchar" })
-    title: string;
-s
-    constructor(id: number, title: string) {
-        this.id = id;
-        this.title = title;
-    }
+	@Column({ type: 'varchar' })
+	title: string;
 
-    rename(string: string) {
-        this.title = string;
-    }
+	constructor(id: number, title: string) {
+		this.id = id;
+		this.title = title;
+	}
 
-    toJSON(): ICategoryJSON {
-        return {
-            id: this.id,
-            title: this.title
-        }
-    }
+	rename(string: string): void {
+		this.title = string;
+	}
+
+	toJSON(): ICategoryJSON {
+		return {
+			id: this.id,
+			title: this.title,
+		};
+	}
 }
