@@ -14,9 +14,9 @@ export interface ITaskJSON {
     priority: number
     estimateDurationHour: number
     isRoot: boolean
-    parentTaskIds: string[]
     tags: Tag[]
     childrenTaskIds: string[]
+    parentTaskIds: string[]
     state: TaskState
 }
 @Entity()
@@ -51,15 +51,15 @@ export class Task {
     @Column({ type: 'boolean', default: false })
     isRoot: boolean;
 
-    @Column('simple-array', { nullable: true })
-    parentTaskIds: string[] = [];
-
     @ManyToMany(() => Tag, { cascade: true })
     @JoinTable()
     tags: Tag[];
 
-    @Column('simple-array')
+    @Column('simple-array', { nullable: true })
     childrenTaskIds: string[]
+
+    @Column('simple-array', { nullable: true })
+    parentTaskIds: string[] = [];
 
     constructor(
         id: string,
@@ -118,9 +118,9 @@ export class Task {
             priority: this.priority,
             estimateDurationHour: this.estimateDurationHour,
             isRoot: this.isRoot,
-            parentTaskIds: this.parentTaskIds,
             tags: this.tags,
             childrenTaskIds: this.childrenTaskIds,
+            parentTaskIds: this.parentTaskIds,
             state: this.state
         }
     }

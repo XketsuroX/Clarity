@@ -1,12 +1,18 @@
+import { Column, Entity, PrimaryColumn } from "typeorm"
+
 export interface ICategoryJSON {
     id: number
     title: string
 }
 
+@Entity()
 export class Category {
+    @PrimaryColumn({ type: "int" })
     id: number;
-    title: string;
 
+    @Column({ type: "varchar" })
+    title: string;
+s
     constructor(id: number, title: string) {
         this.id = id;
         this.title = title;
