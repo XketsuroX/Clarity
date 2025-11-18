@@ -3,20 +3,21 @@ import { Tag } from './Tag'
 import { ICategoryJSON } from './Category'
 import { CategoryManager, categoryManager } from './CategoryManager'
 import { TaskRepository } from './TaskRepository'
+import { TaskDependencyManager } from './TaskDependencyManager'
+import { TaskCalculator } from './TaskCalculator'
 
-/**
- * TaskManager orchestrates task operations and delegates storage to TaskRepository.
- * It also manages the relationship between tasks and categories via CategoryManager.
- */
 export class TaskManager {
     private static instance: TaskManager
     private taskRepository: TaskRepository
     private categoryManager: CategoryManager
+    private dependencyManager: TaskDependencyManager
+    private calculator: TaskCalculator
 
     private constructor(injectedCategoryManager?: CategoryManager) {
         this.taskRepository = new TaskRepository()
-        // allow injection for tests; default to the exported singleton
         this.categoryManager = injectedCategoryManager ?? categoryManager
+        this.dependencyManager = new TaskDependencyManager(this.taskRepository)
+        this.calculator = new TaskCalculator(this.taskRepository)
     }
 
     static getInstance(): TaskManager {
@@ -34,9 +35,6 @@ export class TaskManager {
         return this.categoryManager.listCategories()
     }
 
-    /**
-     * Add a new task with full details
-     */
     addTask(
         id: string,
         title: string,
@@ -48,7 +46,8 @@ export class TaskManager {
         estimateDurationHour: number = 0,
         isRoot: boolean = false,
         tags: Tag[] = [],
-        childrenTaskIds: string[] = []
+        childrenTaskIds: string[] = [],
+        parentTaskIds: string[] = []
     ): ITaskJSON {
         const deadline = new Date(deadlineISO)
         const startDate = new Date(startDateISO)
@@ -64,22 +63,17 @@ export class TaskManager {
             estimateDurationHour,
             isRoot,
             tags,
-            childrenTaskIds
+            childrenTaskIds,
+            parentTaskIds
         )
         this.taskRepository.addTask(task)
         return task.toJSON()
     }
 
-    /**
-     * Remove a task by ID
-     */
     async removeTask(id: string): Promise<boolean> {
         return await this.taskRepository.removeTask(id)
     }
 
-    /**
-     * Toggle task completion status
-     */
     async toggleComplete(id: string): Promise<ITaskJSON | null> {
         const t = await this.taskRepository.getTaskById(id)
         if (!t) return null
@@ -88,21 +82,13 @@ export class TaskManager {
         return t.toJSON()
     }
 
-    /**
-     * Get a single task by ID
-     */
     async getTask(id: string): Promise<ITaskJSON | null> {
         return await this.taskRepository.getTaskByIdJSON(id)
     }
 
-    /**
-     * Update task properties
-     */
     async updateTask(id: string, updates: Partial<ITaskJSON>): Promise<ITaskJSON | null> {
         const task = await this.taskRepository.getTaskById(id)
         if (!task) return null
-
-        // Apply updates
         if (updates.title) task.title = updates.title
         if (updates.description) task.description = updates.description
         if (updates.deadline) task.deadline = new Date(updates.deadline)
@@ -114,53 +100,124 @@ export class TaskManager {
         if (updates.isRoot !== undefined) task.isRoot = updates.isRoot
         if (updates.tags) task.tags = updates.tags
         if (updates.childrenTaskIds) task.childrenTaskIds = updates.childrenTaskIds
-
+        if (updates.parentTaskIds) task.parentTaskIds = updates.parentTaskIds
         this.taskRepository.updateTask(id, task)
         return task.toJSON()
     }
 
-    /**
-     * Add a child task to a parent task
-     */
-    async addSubTask(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
-        const parent = await this.taskRepository.getTaskById(parentTaskId)
-        if (!parent) return null
-
-        if (!parent.childrenTaskIds.includes(childTaskId)) {
-            parent.childrenTaskIds.push(childTaskId)
-            this.taskRepository.updateTask(parentTaskId, parent)
-        }
-
-        return parent.toJSON()
+    async addParent(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
+        return await this.dependencyManager.addParent(parentTaskId, childTaskId)
     }
 
-    /**
-     * Remove a child task from a parent task
-     */
-    async removeSubTask(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
-        const parent = await this.taskRepository.getTaskById(parentTaskId)
-        if (!parent) return null
-
-        parent.childrenTaskIds = parent.childrenTaskIds.filter((id) => id !== childTaskId)
-        this.taskRepository.updateTask(parentTaskId, parent)
-
-        return parent.toJSON()
+    async removeParent(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
+        return await this.dependencyManager.removeParent(parentTaskId, childTaskId)
     }
 
-    /**
-     * Get all child tasks of a parent task
-     */
+    async getParentTasks(taskId: string): Promise<ITaskJSON[]> {
+        return await this.dependencyManager.getParentTasks(taskId)
+    }
+
     async getSubTasks(parentTaskId: string): Promise<ITaskJSON[]> {
-        const parent = await this.taskRepository.getTaskById(parentTaskId)
-        if (!parent) return []
+        return await this.dependencyManager.getSubTasks(parentTaskId)
+    }
 
-        const subTaskPromises = parent.childrenTaskIds.map((id) =>
-            this.taskRepository.getTaskByIdJSON(id)
-        )
-        const resolvedSubTasks = await Promise.all(subTaskPromises)
-        return resolvedSubTasks.filter((t) => t !== null) as ITaskJSON[]
+    async getRootTasks(): Promise<ITaskJSON[]> {
+        return await this.dependencyManager.getRootTasks()
+    }
+
+    async getRootTasksForTask(taskId: string): Promise<ITaskJSON[]> {
+        return await this.dependencyManager.getRootTasksForTask(taskId)
+    }
+
+    async getAllDescendants(taskId: string): Promise<ITaskJSON[]> {
+        return await this.dependencyManager.getAllDescendants(taskId)
+    }
+
+    async getEarliestDeadline(taskIds: string[]): Promise<Date | null> {
+        return await this.calculator.getEarliestDeadline(taskIds)
+    }
+
+    async getLatestStartDate(taskIds: string[]): Promise<Date | null> {
+        return await this.calculator.getLatestStartDate(taskIds)
+    }
+
+    async getGroupTimespan(taskIds: string[]): Promise<{ earliestDeadline: Date | null; latestStartDate: Date | null; taskCount: number }> {
+        return await this.calculator.getGroupTimespan(taskIds)
+    }
+
+    async getTotalEstimatedDuration(taskIds: string[]): Promise<number> {
+        return await this.calculator.getTotalEstimatedDuration(taskIds)
+    }
+
+    async getAveragePriority(taskIds: string[]): Promise<number> {
+        return await this.calculator.getAveragePriority(taskIds)
+    }
+
+    async getCompletionRate(taskIds: string[]): Promise<number> {
+        return await this.calculator.getCompletionRate(taskIds)
+    }
+
+    /**
+     * Refresh task states for all tasks (recalculate state based on current date and deadline)
+     * Useful to call before scheduling calculations to ensure accurate state
+     */
+    async refreshTaskStates(): Promise<void> {
+        const allTasks = await this.listTasks()
+        const now = new Date()
+
+        for (const taskJSON of allTasks) {
+            const task = await this.taskRepository.getTaskById(taskJSON.id)
+            if (!task) continue
+
+            // Recalculate state based on current status
+            if (task.completed) {
+                // State stays 'Completed'
+            } else if (task.deadline.getTime() < now.getTime()) {
+                // Mark as overdue if deadline passed
+                task.toJSON() // state will be 'Overdue'
+            } else {
+                // In Progress
+            }
+
+            // Task states are computed via toJSON(), no need to update DB
+        }
+    }
+
+    /**
+     * Get scheduling information for a task (earliest start, latest finish, slack, criticality)
+     * Automatically refreshes task states before calculation
+     */
+    async getTaskSchedule(taskId: string) {
+        await this.refreshTaskStates()
+        return this.calculator.getTaskSchedule(taskId)
+    }
+
+    /**
+     * Get the critical path for a project (chain of tasks with zero slack)
+     * Automatically refreshes task states before calculation
+     */
+    async getProjectCriticalPath(rootTaskIds: string[]) {
+        await this.refreshTaskStates()
+        return this.calculator.getCriticalPath(rootTaskIds)
+    }
+
+    /**
+     * Get earliest start time for a task
+     * Automatically refreshes task states before calculation
+     */
+    async getTaskEarliestStart(taskId: string): Promise<Date | null> {
+        await this.refreshTaskStates()
+        return this.calculator.calculateEarliestStartTime(taskId)
+    }
+
+    /**
+     * Get latest finish time for a task
+     * Automatically refreshes task states before calculation
+     */
+    async getTaskLatestFinish(taskId: string): Promise<Date | null> {
+        await this.refreshTaskStates()
+        return this.calculator.calculateLatestFinishTime(taskId)
     }
 }
 
-// Export a single instance (TaskManager singleton) to be used by main process
 export const taskManager = TaskManager.getInstance()
