@@ -22,12 +22,12 @@ export class TagManager {
 		return this.availableTags;
 	}
 
-	getAllTags(): Tag[] {
-		return this.tagRepository.getAllTags();
+	async getAllTags(): Promise<Tag[]> {
+		return await this.tagRepository.getAllTags();
 	}
 
-	getTagById(tagId: number): Tag | undefined {
-		return this.tagRepository.getTagById(tagId);
+	async getTagById(tagId: number): Promise<Tag | null> {
+		return await this.tagRepository.getTagById(tagId);
 	}
 
 	addTag(tag: Tag): void {
@@ -45,7 +45,7 @@ export class TagManager {
 	}
 
 	deleteTag(tagId: number): void {
-		this.tagRepository.deleteTag(tagId);
+		this.tagRepository.removeTag(tagId);
 		// Remove from available tags if present
 		this.availableTags = this.availableTags.filter((tag) => tag.id !== tagId);
 	}

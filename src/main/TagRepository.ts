@@ -1,31 +1,33 @@
+import { Repository } from 'typeorm';
+import { AppDataSource } from './Database';
 import { Tag } from './Tag';
 
 export class TagRepository {
-	private tags: Map<number, Tag>;
+	private ormRepository: Repository<Tag>;
 
 	constructor() {
-		this.tags = new Map();
+		this.ormRepository = AppDataSource.getRepository(Tag);
 	}
 
-	getAllTags(): Tag[] {
-		return Array.from(this.tags.values());
+	async getAllTags(): Promise<Tag[]> {
+		return this.ormRepository.find();
 	}
 
-	getTagById(tagId: number): Tag | undefined {
-		return this.tags.get(tagId);
+	async getTagById(id: number): Promise<Tag | null> {
+		return this.ormRepository.findOneBy({ id });
 	}
 
-	addTag(tag: Tag): void {
-		this.tags.set(tag.id, tag);
+	async addTag(tag: Tag): Promise<Tag> {
+		return this.ormRepository.save(tag);
 	}
 
-	updateTag(tag: Tag): void {
-		if (this.tags.has(tag.id)) {
-			this.tags.set(tag.id, tag);
-		}
+	async updateTag(tag: Tag): Promise<boolean> {
+		const result = await this.ormRepository.update(tag.id, tag);
+		return result.affected !== 0;
 	}
 
-	deleteTag(tagId: number): void {
-		this.tags.delete(tagId);
+	async removeTag(id: number): Promise<boolean> {
+		const result = await this.ormRepository.delete(id);
+		return result.affected !== 0;
 	}
 }
