@@ -1,4 +1,4 @@
-import { Tag, ITagJSON } from './Tag';
+import { Tag } from './Tag';
 
 export class TagRepository {
 	private tags: Map<number, Tag>;

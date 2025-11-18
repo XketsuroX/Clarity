@@ -1,4 +1,4 @@
-import { Tag, ITagJSON } from './Tag';
+import { Tag } from './Tag';
 import { TagRepository } from './TagRepository';
 
 export class TagManager {

@@ -91,11 +91,11 @@ export class Task {
 		this.parentTaskIds = parentTaskIds;
 	}
 
-	markCompleted() {
+	markCompleted(): void {
 		this.completed = true;
 	}
 
-	markIncomplete() {
+	markIncomplete(): void {
 		this.completed = false;
 	}
 

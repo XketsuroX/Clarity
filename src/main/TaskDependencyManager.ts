@@ -1,4 +1,4 @@
-import { Task, ITaskJSON } from './Task';
+import { ITaskJSON } from './Task';
 import { TaskRepository } from './TaskRepository';
 
 /**
