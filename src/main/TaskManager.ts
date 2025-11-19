@@ -98,28 +98,8 @@ export class TaskManager {
 		return updatedTask ? this.toJSON(updatedTask) : null;
 	}
 
-	async addParent(parentTaskId: number, childTaskId: number): Promise<ITaskJSON | null> {
-		return await this.dependencyManager.addParent(parentTaskId, childTaskId);
-	}
-
-	async removeParent(parentTaskId: number, childTaskId: number): Promise<ITaskJSON | null> {
-		return await this.dependencyManager.removeParent(parentTaskId, childTaskId);
-	}
-
-	async getParentTasks(taskId: number): Promise<ITaskJSON[]> {
-		return await this.dependencyManager.getParentTasks(taskId);
-	}
-
-	async getSubTasks(parentTaskId: number): Promise<ITaskJSON[]> {
-		return await this.dependencyManager.getSubTasks(parentTaskId);
-	}
-
 	async getRootTasks(): Promise<ITaskJSON[]> {
 		return await this.dependencyManager.getRootTasks();
-	}
-
-	async getRootTasksForTask(taskId: number): Promise<ITaskJSON[]> {
-		return await this.dependencyManager.getRootTasksForTask(taskId);
 	}
 
 	async getAllDescendants(taskId: number): Promise<ITaskJSON[]> {
@@ -211,7 +191,7 @@ export class TaskManager {
 	 * Get the critical path for a project (chain of tasks with zero slack)
 	 * Automatically refreshes task states before calculation
 	 */
-	async getProjectCriticalPath(anyTaskId: number): Promise<Result<string[]>> {
+	async getProjectCriticalPath(anyTaskId: number): Promise<Result<number[]>> {
 		await this.refreshTaskStates();
 		return this.wrapProjectCalc(() => this.calculator.getProjectCriticalPath(anyTaskId));
 	}

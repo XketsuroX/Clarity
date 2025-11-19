@@ -138,4 +138,8 @@ export class TaskRepository {
 	async deleteAll(): Promise<void> {
 		await this.ormRepository.clear();
 	}
+
+	async findDescendants(task: Task): Promise<Task[]> {
+		return this.ormRepository.manager.getTreeRepository(Task).findDescendants(task);
+	}
 }
