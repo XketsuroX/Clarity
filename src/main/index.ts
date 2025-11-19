@@ -20,6 +20,7 @@ function createWindow(): void {
 	});
 
 	mainWindow.on('ready-to-show', () => {
+		if (!mainWindow.isMaximized()) mainWindow.maximize();
 		mainWindow.show();
 	});
 
