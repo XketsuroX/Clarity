@@ -168,18 +168,17 @@ export class TaskCalculator {
 	 * Returns a Map<taskId, { earliestStart, latestFinish, durationMs, earlyFinish, slack, isCritical }>
 	 * or null if scheduling cannot proceed due to constraints (overdue/missing duration).
 	 */
-	async calculateProjectSchedules(taskIds: string[]): Promise<
-		Map<
-			string,
-			{
-				earliestStart: Date;
-				latestFinish: Date;
-				durationMs: number;
-				earlyFinish: Date;
-				slack: number;
-				isCritical: boolean;
-			}
-		> | null> {
+	async calculateProjectSchedules(taskIds: string[]): Promise<Map<
+		string,
+		{
+			earliestStart: Date;
+			latestFinish: Date;
+			durationMs: number;
+			earlyFinish: Date;
+			slack: number;
+			isCritical: boolean;
+		}
+	> | null> {
 		// Load all tasks
 		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.getTaskById(id)));
 		const validTasks = tasks.filter((t) => t !== null) as Task[];
@@ -274,7 +273,8 @@ export class TaskCalculator {
 					if (pFinish.getTime() > maxFinish.getTime()) maxFinish = pFinish;
 				}
 				// earliest start is max of parent finishes, also respect own startDate
-				const candidate = maxFinish.getTime() > t.startDate.getTime() ? maxFinish : t.startDate;
+				const candidate =
+					maxFinish.getTime() > t.startDate.getTime() ? maxFinish : t.startDate;
 				earliestStart.set(id, candidate);
 			}
 		}
@@ -316,7 +316,10 @@ export class TaskCalculator {
 						const dur = childTask.estimateDurationHour * 60 * 60 * 1000;
 						candidate = new Date(cLatest.getTime() - dur);
 					}
-					if (minChildConstraint === null || candidate.getTime() < minChildConstraint.getTime()) {
+					if (
+						minChildConstraint === null ||
+						candidate.getTime() < minChildConstraint.getTime()
+					) {
 						minChildConstraint = candidate;
 					}
 				}
@@ -382,5 +385,4 @@ export class TaskCalculator {
 		const completed = validTasks.filter((t) => t.completed).length;
 		return completed / validTasks.length;
 	}
-
 }
