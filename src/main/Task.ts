@@ -1,127 +1,79 @@
-import { Column, Entity, JoinTable, ManyToMany, PrimaryColumn } from 'typeorm';
+import {
+	Column,
+	Entity,
+	JoinTable,
+	ManyToMany,
+	ManyToOne,
+	PrimaryGeneratedColumn,
+	TreeChildren,
+	TreeParent,
+} from 'typeorm';
 import { Tag } from './Tag';
+import { Category } from './Category';
 
 export type TaskState = 'Completed' | 'In Progress' | 'Overdue';
 
 export interface ITaskJSON {
-	id: string;
+	id: number;
 	title: string;
 	description: string;
-	deadline: string; // ISO string
-	startDate: string; // ISO string
+	deadline: string | null; // ISO string
+	startDate: string | null; // ISO string
 	completed: boolean;
 	categoryId?: number | null;
 	priority: number;
-	estimateDurationHour: number;
-	isRoot: boolean;
+	estimateDurationHour: number | null;
 	tags: Tag[];
-	childrenTaskIds: string[];
-	parentTaskIds: string[];
+	childrenTaskIds: number[];
+	parentTaskId?: number | null;
 	state: TaskState;
 }
 @Entity()
 export class Task {
-	@PrimaryColumn({ type: 'varchar' })
-	id: string;
+	@PrimaryGeneratedColumn()
+	id!: number;
 
 	@Column({ type: 'varchar' })
-	title: string;
+	title!: string;
 
-	@Column({ type: 'varchar' })
-	description: string;
+	@Column({ type: 'text', default: '' })
+	description!: string;
 
-	@Column({ type: 'datetime' })
-	deadline: Date;
+	@Column({ type: 'datetime', nullable: true })
+	deadline!: Date | null;
 
-	@Column({ type: 'datetime' })
-	startDate: Date;
+	@Column({ type: 'datetime', nullable: true })
+	startDate!: Date | null;
 
 	@Column({ type: 'boolean', default: false })
-	completed: boolean;
+	completed!: boolean;
+
+	@ManyToOne(() => Category, (category) => category.tasks, {
+		onDelete: 'SET NULL',
+		nullable: true,
+	})
+	category?: Category | null;
+
+	@Column({ type: 'int', default: 0 })
+	priority!: number;
 
 	@Column({ type: 'int', nullable: true })
-	categoryId?: number | null;
-
-	@Column({ type: 'int', default: 0 })
-	priority: number;
-
-	@Column({ type: 'int', default: 0 })
-	estimateDurationHour: number;
-
-	@Column({ type: 'boolean', default: false })
-	isRoot: boolean;
+	estimateDurationHour!: number | null;
 
 	@ManyToMany(() => Tag, { cascade: true })
 	@JoinTable()
-	tags: Tag[];
+	tags!: Tag[];
 
-	@Column('simple-array', { nullable: true })
-	childrenTaskIds: string[];
+	@TreeChildren()
+	childrenTasks!: Task[];
 
-	@Column('simple-array', { nullable: true })
-	parentTaskIds: string[] = [];
-
-	constructor(
-		id: string,
-		title: string,
-		description: string,
-		deadline: Date,
-		startDate: Date,
-		completed = false,
-		categoryId: number | null = null,
-		priority = 0,
-		estimateDurationHour = 0,
-		isRoot = false,
-		tags: Tag[],
-		childrenTaskIds: string[] = [],
-		parentTaskIds: string[] = []
-	) {
-		this.id = id;
-		this.title = title;
-		this.description = description;
-		this.deadline = deadline;
-		this.startDate = startDate;
-		this.completed = completed;
-		this.categoryId = categoryId;
-		this.priority = priority;
-		this.estimateDurationHour = estimateDurationHour;
-		this.isRoot = isRoot;
-		this.tags = tags;
-		this.childrenTaskIds = childrenTaskIds;
-		this.parentTaskIds = parentTaskIds;
-	}
-
-	markCompleted(): void {
-		this.completed = true;
-	}
-
-	markIncomplete(): void {
-		this.completed = false;
-	}
+	@TreeParent()
+	parentTask!: Task | null;
 
 	get state(): TaskState {
 		if (this.completed) return 'Completed';
 		const now = new Date();
-		if (this.deadline.getTime() < now.getTime()) return 'Overdue';
+		if (this.deadline && this.deadline.getTime() < now.getTime()) return 'Overdue';
 		return 'In Progress';
-	}
-
-	toJSON(): ITaskJSON {
-		return {
-			id: this.id,
-			title: this.title,
-			description: this.description,
-			deadline: this.deadline.toISOString(),
-			startDate: this.startDate.toISOString(),
-			completed: this.completed,
-			categoryId: this.categoryId ?? null,
-			priority: this.priority,
-			estimateDurationHour: this.estimateDurationHour,
-			isRoot: this.isRoot,
-			tags: this.tags,
-			childrenTaskIds: this.childrenTaskIds,
-			parentTaskIds: this.parentTaskIds,
-			state: this.state,
-		};
 	}
 }
