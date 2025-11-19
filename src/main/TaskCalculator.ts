@@ -32,8 +32,8 @@ export class TaskCalculator {
 	 * @param taskIds - list of task IDs
 	 * @returns earliest deadline Date or null if no tasks found
 	 */
-	async getEarliestDeadline(taskIds: string[]): Promise<Date | null> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.getTaskById(id)));
+	async getEarliestDeadline(taskIds: number[]): Promise<Date | null> {
+		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
 		const validTasks = tasks.filter((t) => t !== null) as Task[];
 
 		if (validTasks.length === 0) return null;
@@ -50,8 +50,8 @@ export class TaskCalculator {
 	 * @param taskIds - list of task IDs
 	 * @returns latest start date Date or null if no tasks found
 	 */
-	async getLatestStartDate(taskIds: string[]): Promise<Date | null> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.getTaskById(id)));
+	async getLatestStartDate(taskIds: number[]): Promise<Date | null> {
+		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
 		const validTasks = tasks.filter((t) => t !== null) as Task[];
 
 		if (validTasks.length === 0) return null;
@@ -67,7 +67,7 @@ export class TaskCalculator {
 	 * Get deadline info for a task group: earliest deadline and latest start date
 	 * Useful for understanding temporal bounds of a project/group
 	 */
-	async getGroupTimespan(taskIds: string[]): Promise<{
+	async getGroupTimespan(taskIds: number[]): Promise<{
 		earliestDeadline: Date | null;
 		latestStartDate: Date | null;
 		taskCount: number;
@@ -89,11 +89,11 @@ export class TaskCalculator {
 	 * @param anyTaskId - any task ID within the project (will locate root(s) automatically)
 	 * @returns timespan info for the entire project (covers all roots found)
 	 */
-	async getProjectTimespan(anyTaskId: string): Promise<{
+	async getProjectTimespan(anyTaskId: number): Promise<{
 		earliestDeadline: Date | null;
 		latestStartDate: Date | null;
 		taskCount: number;
-		rootTaskIds: string[];
+		rootTaskIds: number[];
 	} | null> {
 		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
 		if (!project) return null;
@@ -110,35 +110,35 @@ export class TaskCalculator {
 	 * Project-level wrappers that accept any task within a project and
 	 * compute group metrics for the entire project (root(s) + descendants).
 	 */
-	async getProjectTotalEstimatedDuration(anyTaskId: string): Promise<number | null> {
+	async getProjectTotalEstimatedDuration(anyTaskId: number): Promise<number | null> {
 		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
 		if (!project) return null;
 		return this.getTotalEstimatedDuration(project.allTaskIds);
 	}
 
-	async getProjectAveragePriority(anyTaskId: string): Promise<number | null> {
+	async getProjectAveragePriority(anyTaskId: number): Promise<number | null> {
 		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
 		if (!project) return null;
 		return this.getAveragePriority(project.allTaskIds);
 	}
 
-	async getProjectCompletionRate(anyTaskId: string): Promise<number | null> {
+	async getProjectCompletionRate(anyTaskId: number): Promise<number | null> {
 		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
 		if (!project) return null;
 		return this.getCompletionRate(project.allTaskIds);
 	}
 
-	async getProjectCriticalPath(anyTaskId: string): Promise<string[] | null> {
+	async getProjectCriticalPath(anyTaskId: number): Promise<number[] | null> {
 		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
 		if (!project) return null;
 		// Compute schedules for the whole project in one pass
 		const schedules = await this.calculateProjectSchedules(project.allTaskIds);
 		if (!schedules) return null;
 
-		const criticalTasks: string[] = [];
-		const visited = new Set<string>();
+		const criticalTasks: number[] = [];
+		const visited = new Set<number>();
 
-		const traverse = async (taskId: string): Promise<void> => {
+		const traverse = async (taskId: number): Promise<void> => {
 			if (visited.has(taskId)) return;
 			visited.add(taskId);
 			const info = schedules.get(taskId);
@@ -146,7 +146,7 @@ export class TaskCalculator {
 			if (info.isCritical) {
 				criticalTasks.push(taskId);
 				// descend to children that are critical
-				const task = await this.taskRepository.getTaskById(taskId);
+				const task = await this.taskRepository.findById(taskId);
 				if (task) {
 					for (const childId of task.childrenTaskIds) {
 						await traverse(childId);
@@ -168,22 +168,21 @@ export class TaskCalculator {
 	 * Returns a Map<taskId, { earliestStart, latestFinish, durationMs, earlyFinish, slack, isCritical }>
 	 * or null if scheduling cannot proceed due to constraints (overdue/missing duration).
 	 */
-	async calculateProjectSchedules(taskIds: string[]): Promise<
-		Map<
-			string,
-			{
-				earliestStart: Date;
-				latestFinish: Date;
-				durationMs: number;
-				earlyFinish: Date;
-				slack: number;
-				isCritical: boolean;
-			}
-		> | null> {
+	async calculateProjectSchedules(taskIds: number[]): Promise<Map<
+		string,
+		{
+			earliestStart: Date;
+			latestFinish: Date;
+			durationMs: number;
+			earlyFinish: Date;
+			slack: number;
+			isCritical: boolean;
+		}
+	> | null> {
 		// Load all tasks
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.getTaskById(id)));
+		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
 		const validTasks = tasks.filter((t) => t !== null) as Task[];
-		const taskMap = new Map<string, Task>();
+		const taskMap = new Map<number, Task>();
 		for (const t of validTasks) taskMap.set(t.id, t);
 
 		// Basic validation: ensure no overdue or missing duration (per requirements)
@@ -204,8 +203,8 @@ export class TaskCalculator {
 		}
 
 		// Build parent/child adjacency limited to project
-		const parents = new Map<string, string[]>();
-		const children = new Map<string, string[]>();
+		const parents = new Map<number, number[]>();
+		const children = new Map<number, number[]>();
 		for (const id of taskIds) {
 			parents.set(id, []);
 			children.set(id, []);
@@ -220,11 +219,11 @@ export class TaskCalculator {
 		}
 
 		// Kahn's algorithm for topological order
-		const indegree = new Map<string, number>();
+		const indegree = new Map<number, number>();
 		for (const id of taskIds) indegree.set(id, parents.get(id)!.length);
-		const queue: string[] = [];
+		const queue: number[] = [];
 		for (const [id, deg] of indegree) if (deg === 0) queue.push(id);
-		const topo: string[] = [];
+		const topo: number[] = [];
 		while (queue.length > 0) {
 			const id = queue.shift()!;
 			topo.push(id);
@@ -243,7 +242,7 @@ export class TaskCalculator {
 		}
 
 		// Forward pass: earliest starts
-		const earliestStart = new Map<string, Date>();
+		const earliestStart = new Map<number, Date>();
 		for (const id of topo) {
 			const t = taskMap.get(id)!;
 			if (t.parentTaskIds.length === 0 || (parents.get(id) || []).length === 0) {
@@ -274,13 +273,14 @@ export class TaskCalculator {
 					if (pFinish.getTime() > maxFinish.getTime()) maxFinish = pFinish;
 				}
 				// earliest start is max of parent finishes, also respect own startDate
-				const candidate = maxFinish.getTime() > t.startDate.getTime() ? maxFinish : t.startDate;
+				const candidate =
+					maxFinish.getTime() > t.startDate.getTime() ? maxFinish : t.startDate;
 				earliestStart.set(id, candidate);
 			}
 		}
 
 		// Compute early finishes
-		const earlyFinish = new Map<string, Date>();
+		const earlyFinish = new Map<number, Date>();
 		for (const id of topo) {
 			const t = taskMap.get(id)!;
 			const es = earliestStart.get(id)!;
@@ -293,7 +293,7 @@ export class TaskCalculator {
 		}
 
 		// Backward pass: latest finishes
-		const latestFinish = new Map<string, Date>();
+		const latestFinish = new Map<number, Date>();
 		// initialize leaves to their deadlines
 		const reverseTopo = topo.slice().reverse();
 		for (const id of reverseTopo) {
@@ -316,7 +316,10 @@ export class TaskCalculator {
 						const dur = childTask.estimateDurationHour * 60 * 60 * 1000;
 						candidate = new Date(cLatest.getTime() - dur);
 					}
-					if (minChildConstraint === null || candidate.getTime() < minChildConstraint.getTime()) {
+					if (
+						minChildConstraint === null ||
+						candidate.getTime() < minChildConstraint.getTime()
+					) {
 						minChildConstraint = candidate;
 					}
 				}
@@ -355,8 +358,8 @@ export class TaskCalculator {
 	/**
 	 * Calculate total estimated duration for a group of tasks (in hours)
 	 */
-	async getTotalEstimatedDuration(taskIds: string[]): Promise<number> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.getTaskById(id)));
+	async getTotalEstimatedDuration(taskIds: number[]): Promise<number> {
+		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
 		const validTasks = tasks.filter((t) => t !== null) as Task[];
 		return validTasks.reduce((total, task) => total + task.estimateDurationHour, 0);
 	}
@@ -364,8 +367,8 @@ export class TaskCalculator {
 	/**
 	 * Get average priority for a task group
 	 */
-	async getAveragePriority(taskIds: string[]): Promise<number> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.getTaskById(id)));
+	async getAveragePriority(taskIds: number[]): Promise<number> {
+		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
 		const validTasks = tasks.filter((t) => t !== null) as Task[];
 		if (validTasks.length === 0) return 0;
 		const total = validTasks.reduce((sum, task) => sum + task.priority, 0);
@@ -375,12 +378,11 @@ export class TaskCalculator {
 	/**
 	 * Get completion rate for a task group (0 to 1)
 	 */
-	async getCompletionRate(taskIds: string[]): Promise<number> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.getTaskById(id)));
+	async getCompletionRate(taskIds: number[]): Promise<number> {
+		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
 		const validTasks = tasks.filter((t) => t !== null) as Task[];
 		if (validTasks.length === 0) return 0;
 		const completed = validTasks.filter((t) => t.completed).length;
 		return completed / validTasks.length;
 	}
-
 }

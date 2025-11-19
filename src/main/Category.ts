@@ -1,4 +1,5 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Task } from './Task';
 
 export interface ICategoryJSON {
 	id: number;
@@ -15,4 +16,7 @@ export class Category {
 
 	@CreateDateColumn()
 	createdAt!: Date;
+
+	@OneToMany(() => Task, (task) => task.category)
+	tasks!: Task[];
 }

@@ -1,4 +1,5 @@
 import { ITaskJSON } from './Task';
+import { taskManager } from './TaskManager';
 import { TaskRepository } from './TaskRepository';
 
 /**
@@ -18,9 +19,9 @@ export class TaskDependencyManager {
 	 * @param childTaskId - child task ID
 	 * @returns Updated parent task or null if not found/cycle detected
 	 */
-	async addParent(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
-		const parent = await this.taskRepository.getTaskById(parentTaskId);
-		const child = await this.taskRepository.getTaskById(childTaskId);
+	async addParent(parentTaskId: number, childTaskId: number): Promise<ITaskJSON | null> {
+		const parent = await this.taskRepository.findById(parentTaskId);
+		const child = await this.taskRepository.findById(childTaskId);
 		if (!parent || !child) return null;
 
 		// Check for cycles before adding
@@ -34,17 +35,17 @@ export class TaskDependencyManager {
 		// Add child to parent's children list
 		if (!parent.childrenTaskIds.includes(childTaskId)) {
 			parent.childrenTaskIds.push(childTaskId);
-			this.taskRepository.updateTask(parentTaskId, parent);
+			this.taskRepository.update(parentTaskId, parent);
 		}
 
 		// Add parent to child's parents list
 		if (!child.parentTaskIds.includes(parentTaskId)) {
 			child.parentTaskIds.push(parentTaskId);
 			child.isRoot = false;
-			this.taskRepository.updateTask(childTaskId, child);
+			this.taskRepository.update(childTaskId, child);
 		}
 
-		return parent.toJSON();
+		return taskManager.toJSON(parent);
 	}
 
 	/**
@@ -53,14 +54,14 @@ export class TaskDependencyManager {
 	 * @param childTaskId - child task ID
 	 * @returns Updated parent task or null if not found
 	 */
-	async removeParent(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
-		const parent = await this.taskRepository.getTaskById(parentTaskId);
-		const child = await this.taskRepository.getTaskById(childTaskId);
+	async removeParent(parentTaskId: number, childTaskId: number): Promise<ITaskJSON | null> {
+		const parent = await this.taskRepository.findById(parentTaskId);
+		const child = await this.taskRepository.findById(childTaskId);
 		if (!parent || !child) return null;
 
 		// Remove child from parent's children list
 		parent.childrenTaskIds = parent.childrenTaskIds.filter((id) => id !== childTaskId);
-		this.taskRepository.updateTask(parentTaskId, parent);
+		this.taskRepository.update(parentTaskId, parent);
 
 		// Remove parent from child's parents list
 		child.parentTaskIds = child.parentTaskIds.filter((id) => id !== parentTaskId);
@@ -69,16 +70,16 @@ export class TaskDependencyManager {
 		if (child.parentTaskIds.length === 0) {
 			child.isRoot = true;
 		}
-		this.taskRepository.updateTask(childTaskId, child);
+		this.taskRepository.update(childTaskId, child);
 
-		return parent.toJSON();
+		return taskManager.toJSON(parent);
 	}
 
 	/**
 	 * Get all parent tasks of a given task
 	 */
-	async getParentTasks(taskId: string): Promise<ITaskJSON[]> {
-		const task = await this.taskRepository.getTaskById(taskId);
+	async getParentTasks(taskId: number): Promise<ITaskJSON[]> {
+		const task = await this.taskRepository.findById(taskId);
 		if (!task || task.parentTaskIds.length === 0) return [];
 
 		const parentPromises = task.parentTaskIds.map((id) =>
@@ -91,8 +92,8 @@ export class TaskDependencyManager {
 	/**
 	 * Get all child tasks of a parent task
 	 */
-	async getSubTasks(parentTaskId: string): Promise<ITaskJSON[]> {
-		const parent = await this.taskRepository.getTaskById(parentTaskId);
+	async getSubTasks(parentTaskId: number): Promise<ITaskJSON[]> {
+		const parent = await this.taskRepository.findById(parentTaskId);
 		if (!parent) return [];
 
 		const subTaskPromises = parent.childrenTaskIds.map((id) =>
@@ -108,15 +109,15 @@ export class TaskDependencyManager {
 	 * @param potentialParentId - potential parent (upstream)
 	 * @returns true if a cycle would be created
 	 */
-	async wouldCreateCycle(childTaskId: string, potentialParentId: string): Promise<boolean> {
-		const visited = new Set<string>();
+	async wouldCreateCycle(childTaskId: number, potentialParentId: number): Promise<boolean> {
+		const visited = new Set<number>();
 
-		const traverse = async (currentId: string): Promise<boolean> => {
+		const traverse = async (currentId: number): Promise<boolean> => {
 			if (visited.has(currentId)) return false; // Already visited in this path
 			if (currentId === childTaskId) return true; // Cycle detected!
 			visited.add(currentId);
 
-			const task = await this.taskRepository.getTaskById(currentId);
+			const task = await this.taskRepository.findById(currentId);
 			if (!task) return false;
 
 			// Check all parents of current task
@@ -134,7 +135,7 @@ export class TaskDependencyManager {
 	 * Get all root tasks (tasks with no parents) in the entire system
 	 */
 	async getRootTasks(): Promise<ITaskJSON[]> {
-		const allTasks = await this.taskRepository.getAllTasks();
+		const allTasks = await this.taskRepository.findAll();
 		return allTasks.filter((t) => t.isRoot || t.parentTaskIds.length === 0);
 	}
 
@@ -142,20 +143,20 @@ export class TaskDependencyManager {
 	 * Get all root tasks that can reach the given task by traversing up through parents
 	 * Returns all root ancestor nodes
 	 */
-	async getRootTasksForTask(taskId: string): Promise<ITaskJSON[]> {
-		const visited = new Set<string>();
+	async getRootTasksForTask(taskId: number): Promise<ITaskJSON[]> {
+		const visited = new Set<number>();
 		const roots: ITaskJSON[] = [];
 
-		const traverse = async (currentId: string): Promise<void> => {
+		const traverse = async (currentId: number): Promise<void> => {
 			if (visited.has(currentId)) return; // Prevent revisiting
 			visited.add(currentId);
 
-			const task = await this.taskRepository.getTaskById(currentId);
+			const task = await this.taskRepository.findById(currentId);
 			if (!task) return;
 
 			if (task.parentTaskIds.length === 0) {
 				// This is a root
-				roots.push(task.toJSON());
+				roots.push(taskManager.toJSON(task));
 			} else {
 				// Traverse up to all parents
 				for (const parentId of task.parentTaskIds) {
@@ -171,15 +172,15 @@ export class TaskDependencyManager {
 	/**
 	 * Get all descendants (children and their children recursively) of a task
 	 */
-	async getAllDescendants(taskId: string): Promise<ITaskJSON[]> {
-		const visited = new Set<string>();
+	async getAllDescendants(taskId: number): Promise<ITaskJSON[]> {
+		const visited = new Set<number>();
 		const descendants: ITaskJSON[] = [];
 
-		const traverse = async (currentId: string): Promise<void> => {
+		const traverse = async (currentId: number): Promise<void> => {
 			if (visited.has(currentId)) return; // Prevent cycles
 			visited.add(currentId);
 
-			const task = await this.taskRepository.getTaskById(currentId);
+			const task = await this.taskRepository.findById(currentId);
 			if (!task) return;
 
 			for (const childId of task.childrenTaskIds) {
@@ -194,19 +195,21 @@ export class TaskDependencyManager {
 		await traverse(taskId);
 		return descendants;
 	}
-	
+
 	/**
 	 * Collect all task IDs that belong to the project containing `anyTaskId`.
 	 * Returns both the deduplicated list of task IDs and the root ancestor IDs.
 	 */
-	async collectProjectTaskIds(anyTaskId: string): Promise<{ allTaskIds: string[]; rootIds: string[] } | null> {
-		const task = await this.taskRepository.getTaskById(anyTaskId);
+	async collectProjectTaskIds(
+		anyTaskId: number
+	): Promise<{ allTaskIds: number[]; rootIds: number[] } | null> {
+		const task = await this.taskRepository.findById(anyTaskId);
 		if (!task) return null;
 
 		const rootTasks = await this.getRootTasksForTask(anyTaskId);
 		const rootIds = rootTasks.length > 0 ? rootTasks.map((r) => r.id) : [anyTaskId];
 
-		const allTaskIdSet = new Set<string>();
+		const allTaskIdSet = new Set<number>();
 		for (const rootId of rootIds) {
 			allTaskIdSet.add(rootId);
 			const descendantsJSON = await this.getAllDescendants(rootId);
