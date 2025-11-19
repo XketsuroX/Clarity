@@ -7,6 +7,8 @@ import { TaskDependencyManager } from './TaskDependencyManager';
 import { TaskCalculator } from './TaskCalculator';
 import { ErrorHandler, Result } from './ErrorHandler';
 
+
+
 export class TaskManager {
 	private static instance: TaskManager;
 	private taskRepository: TaskRepository;
@@ -14,6 +16,21 @@ export class TaskManager {
 	private dependencyManager: TaskDependencyManager;
 	private calculator: TaskCalculator;
 	private errorHandler: ErrorHandler;
+
+
+	/**
+	 * Helper to wrap project-level calculator calls with error handling
+	 */
+	private async wrapProjectCalc<T>(fn: () => Promise<T | null>, notFoundMsg = 'Project not found'): Promise<Result<T>> {
+		try {
+			const v = await fn();
+			if (v === null)
+				return { ok: false, error: { code: 'NOT_FOUND', message: notFoundMsg } };
+			return { ok: true, value: v };
+		} catch (e) {
+			return { ok: false, error: this.errorHandler.formatError(e) };
+		}
+	}
 
 	private constructor(injectedCategoryManager?: CategoryManager) {
 		this.taskRepository = new TaskRepository();
@@ -208,63 +225,29 @@ export class TaskManager {
 		}
 	}
 
-	async getProjectTimespan(anyTaskId: string): Promise<Result<
-		| {
-			  earliestDeadline: Date | null;
-			  latestStartDate: Date | null;
-			  taskCount: number;
-			  rootTaskIds: string[];
-		  }
-		| null
-	>> {
+	async getProjectTimespan(anyTaskId: string): Promise<Result<{
+		earliestDeadline: Date | null;
+		latestStartDate: Date | null;
+		taskCount: number;
+		rootTaskIds: string[];
+	}>> {
 		await this.refreshTaskStates();
-		try {
-			const res = await this.calculator.getProjectTimespan(anyTaskId);
-			if (!res)
-				return {
-					ok: false,
-					error: { code: 'NOT_FOUND', message: 'Project not found', details: { anyTaskId } },
-				};
-			return { ok: true, value: res };
-		} catch (e) {
-			return { ok: false, error: this.errorHandler.formatError(e) };
-		}
+		return this.wrapProjectCalc(() => this.calculator.getProjectTimespan(anyTaskId));
 	}
 
 	async getProjectTotalEstimatedDuration(anyTaskId: string): Promise<Result<number>> {
 		await this.refreshTaskStates();
-		try {
-			const v = await this.calculator.getProjectTotalEstimatedDuration(anyTaskId);
-			if (v === null)
-				return { ok: false, error: { code: 'NOT_FOUND', message: 'Project not found' } };
-			return { ok: true, value: v };
-		} catch (e) {
-			return { ok: false, error: this.errorHandler.formatError(e) };
-		}
+		return this.wrapProjectCalc(() => this.calculator.getProjectTotalEstimatedDuration(anyTaskId));
 	}
 
 	async getProjectAveragePriority(anyTaskId: string): Promise<Result<number>> {
 		await this.refreshTaskStates();
-		try {
-			const v = await this.calculator.getProjectAveragePriority(anyTaskId);
-			if (v === null)
-				return { ok: false, error: { code: 'NOT_FOUND', message: 'Project not found' } };
-			return { ok: true, value: v };
-		} catch (e) {
-			return { ok: false, error: this.errorHandler.formatError(e) };
-		}
+		return this.wrapProjectCalc(() => this.calculator.getProjectAveragePriority(anyTaskId));
 	}
 
 	async getProjectCompletionRate(anyTaskId: string): Promise<Result<number>> {
 		await this.refreshTaskStates();
-		try {
-			const v = await this.calculator.getProjectCompletionRate(anyTaskId);
-			if (v === null)
-				return { ok: false, error: { code: 'NOT_FOUND', message: 'Project not found' } };
-			return { ok: true, value: v };
-		} catch (e) {
-			return { ok: false, error: this.errorHandler.formatError(e) };
-		}
+		return this.wrapProjectCalc(() => this.calculator.getProjectCompletionRate(anyTaskId));
 	}
 
 	/**
@@ -273,13 +256,7 @@ export class TaskManager {
 	 */
 	async getProjectCriticalPath(anyTaskId: string): Promise<Result<string[]>> {
 		await this.refreshTaskStates();
-		try {
-			const v = await this.calculator.getProjectCriticalPath(anyTaskId);
-			if (!v) return { ok: false, error: { code: 'NOT_FOUND', message: 'Project not found' } };
-			return { ok: true, value: v };
-		} catch (e) {
-			return { ok: false, error: this.errorHandler.formatError(e) };
-		}
+		return this.wrapProjectCalc(() => this.calculator.getProjectCriticalPath(anyTaskId));
 	}
 }
 
