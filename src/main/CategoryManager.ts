@@ -1,50 +1,61 @@
-import { Category, ICategoryJSON } from './Category';
+import { CategoryRepository } from './CategoryRepository';
+import { type Category, type ICategoryJSON } from './Category';
 
 export class CategoryManager {
-	private static instance: CategoryManager;
-	private categories: Map<number, Category>;
-	private nextId: number;
+	private readonly categoryRepository: CategoryRepository;
 
-	private constructor() {
-		this.categories = new Map();
-		this.nextId = 1;
+	constructor() {
+		this.categoryRepository = new CategoryRepository();
 	}
 
-	static getInstance(): CategoryManager {
-		if (!CategoryManager.instance) {
-			CategoryManager.instance = new CategoryManager();
+	private toJSON(category: Category): ICategoryJSON {
+		return {
+			id: category.id,
+			title: category.title,
+		};
+	}
+
+	private async validateTitle(title: string, currentId?: number): Promise<string> {
+		const trimmedTitle = title.trim();
+
+		if (trimmedTitle === '') {
+			throw new Error('Category title cannot be empty.');
 		}
-		return CategoryManager.instance;
+
+		const existingCategory = await this.categoryRepository.findByName(trimmedTitle);
+
+		if (existingCategory && existingCategory.id !== currentId) {
+			throw new Error(`Category "${trimmedTitle}" already exists.`);
+		}
+
+		return trimmedTitle;
 	}
 
-	listCategories(): ICategoryJSON[] {
-		return Array.from(this.categories.values()).map((c) => c.toJSON());
+	async listCategories(): Promise<ICategoryJSON[]> {
+		const categories = await this.categoryRepository.findAll();
+		return categories.map((c) => this.toJSON(c));
 	}
 
-	addCategory(title: string): ICategoryJSON {
-		const id = this.nextId++;
-		const category = new Category(id, title);
-		this.categories.set(id, category);
-		return category.toJSON();
+	async addCategory(title: string): Promise<ICategoryJSON> {
+		const validatedTitle = await this.validateTitle(title);
+		const newCategory = await this.categoryRepository.create(validatedTitle);
+		return this.toJSON(newCategory);
 	}
 
-	removeCategory(id: number): boolean {
-		return this.categories.delete(id);
+	async removeCategory(id: number): Promise<boolean> {
+		return this.categoryRepository.delete(id);
 	}
 
-	getCategory(id: number): ICategoryJSON | null {
-		const category = this.categories.get(id);
-		return category ? category.toJSON() : null;
+	async getCategory(id: number): Promise<ICategoryJSON | null> {
+		const category = await this.categoryRepository.findById(id);
+		return category ? this.toJSON(category) : null;
 	}
 
-	renameCategory(id: number, newTitle: string): ICategoryJSON | null {
-		const category = this.categories.get(id);
-		if (!category) return null;
-
-		category.rename(newTitle);
-		return category.toJSON();
+	async renameCategory(id: number, newTitle: string): Promise<ICategoryJSON | null> {
+		const validatedTitle = await this.validateTitle(newTitle, id);
+		const updatedCategory = await this.categoryRepository.update(id, { title: validatedTitle });
+		return updatedCategory ? this.toJSON(updatedCategory) : null;
 	}
 }
 
-// Export a single instance (CategoryManager singleton) to be used by main process
-export const categoryManager = CategoryManager.getInstance();
+export const categoryManager = new CategoryManager();

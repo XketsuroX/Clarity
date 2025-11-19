@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 export interface ICategoryJSON {
 	id: number;
@@ -7,25 +7,12 @@ export interface ICategoryJSON {
 
 @Entity()
 export class Category {
-	@PrimaryColumn({ type: 'int' })
-	id: number;
+	@PrimaryGeneratedColumn()
+	id!: number;
 
-	@Column({ type: 'varchar' })
-	title: string;
+	@Column({ type: 'varchar', unique: true })
+	title!: string;
 
-	constructor(id: number, title: string) {
-		this.id = id;
-		this.title = title;
-	}
-
-	rename(string: string): void {
-		this.title = string;
-	}
-
-	toJSON(): ICategoryJSON {
-		return {
-			id: this.id,
-			title: this.title,
-		};
-	}
+	@CreateDateColumn()
+	createdAt!: Date;
 }
