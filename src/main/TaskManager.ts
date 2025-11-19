@@ -1,4 +1,4 @@
-import { Task, ITaskJSON } from './Task';
+import { ITaskJSON } from './Task';
 import { CategoryManager, categoryManager } from './CategoryManager';
 import { CreateTaskData, TaskRepository, UpdateTaskData } from './TaskRepository';
 import { TaskDependencyManager } from './TaskDependencyManager';
@@ -37,32 +37,14 @@ export class TaskManager {
 		this.errorHandler = new ErrorHandler();
 	}
 
-	toJSON(task: Task): ITaskJSON {
-		return {
-			id: task.id,
-			title: task.title,
-			description: task.description,
-			deadline: task.deadline?.toISOString() ?? null,
-			startDate: task.startDate?.toISOString() ?? null,
-			completed: task.completed,
-			categoryId: task.category?.id ?? null,
-			priority: task.priority,
-			estimateDurationHour: task.estimateDurationHour,
-			tags: task.tags,
-			childrenTaskIds: task.childrenTasks?.map((task) => task.id) ?? [],
-			parentTaskId: task.parentTask?.id ?? null,
-			state: task.state,
-		};
-	}
-
 	async listTasks(): Promise<ITaskJSON[]> {
 		const tasks = await this.taskRepository.findAll();
-		return tasks.map((task) => this.toJSON(task));
+		return tasks.map((task) => task.toJSON());
 	}
 
 	async addTask(data: CreateTaskData): Promise<ITaskJSON> {
 		const newTask = await this.taskRepository.create(data);
-		return this.toJSON(newTask);
+		return newTask.toJSON();
 	}
 
 	async removeTask(id: number): Promise<boolean> {
@@ -75,12 +57,12 @@ export class TaskManager {
 		const updatedTask = await this.taskRepository.update(id, {
 			completed: !task.completed,
 		});
-		return updatedTask ? this.toJSON(updatedTask) : null;
+		return updatedTask?.toJSON() ?? null;
 	}
 
 	async getTask(id: number): Promise<ITaskJSON | null> {
 		const task = await this.taskRepository.findById(id);
-		return task ? this.toJSON(task) : null;
+		return task?.toJSON() ?? null;
 	}
 
 	async updateTask(id: number, data: UpdateTaskData): Promise<ITaskJSON | null> {
@@ -95,7 +77,7 @@ export class TaskManager {
 		}
 
 		const updatedTask = await this.taskRepository.update(id, data);
-		return updatedTask ? this.toJSON(updatedTask) : null;
+		return updatedTask?.toJSON() ?? null;
 	}
 
 	async getRootTasks(): Promise<ITaskJSON[]> {
@@ -149,7 +131,7 @@ export class TaskManager {
 				// State stays 'Completed'
 			} else if (task.deadline && task.deadline.getTime() < now.getTime()) {
 				// Mark as overdue if deadline passed
-				this.toJSON(task); // state will be 'Overdue'
+				task.toJSON(); // state will be 'Overdue'
 			} else {
 				// In Progress
 			}

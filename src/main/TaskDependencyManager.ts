@@ -1,5 +1,4 @@
 import { ITaskJSON, Task } from './Task';
-import { taskManager } from './TaskManager';
 import { TaskRepository } from './TaskRepository';
 
 /**
@@ -39,7 +38,7 @@ export class TaskDependencyManager {
 	 */
 	async getRootTasks(): Promise<ITaskJSON[]> {
 		const allTasks = await this.taskRepository.findAll();
-		return allTasks.filter((t) => t.parentTask === null).map((t) => taskManager.toJSON(t));
+		return allTasks.filter((t) => t.parentTask === null).map((t) => t.toJSON());
 	}
 
 	/**
@@ -66,11 +65,8 @@ export class TaskDependencyManager {
 		const parent = await this.taskRepository.findById(taskId);
 		if (!parent) return [];
 
-		return (await this.taskRepository.findDescendants(parent)).map((t) =>
-			taskManager.toJSON(t)
-		);
+		return (await this.taskRepository.findDescendants(parent)).map((t) => t.toJSON());
 	}
-
 
 	/**
 	 * Collect all task IDs that belong to the project containing `anyTaskId`.

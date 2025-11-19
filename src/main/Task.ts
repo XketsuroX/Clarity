@@ -76,4 +76,22 @@ export class Task {
 		if (this.deadline && this.deadline.getTime() < now.getTime()) return 'Overdue';
 		return 'In Progress';
 	}
+
+	toJSON(): ITaskJSON {
+		return {
+			id: this.id,
+			title: this.title,
+			description: this.description,
+			deadline: this.deadline?.toISOString() ?? null,
+			startDate: this.startDate?.toISOString() ?? null,
+			completed: this.completed,
+			categoryId: this.category?.id ?? null,
+			priority: this.priority,
+			estimateDurationHour: this.estimateDurationHour,
+			tags: this.tags,
+			childrenTaskIds: this.childrenTasks?.map((task) => task.id) ?? [],
+			parentTaskId: this.parentTask?.id ?? null,
+			state: this.state,
+		};
+	}
 }
