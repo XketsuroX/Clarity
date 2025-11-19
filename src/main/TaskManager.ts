@@ -7,8 +7,6 @@ import { TaskDependencyManager } from './TaskDependencyManager';
 import { TaskCalculator } from './TaskCalculator';
 import { ErrorHandler, Result } from './ErrorHandler';
 
-
-
 export class TaskManager {
 	private static instance: TaskManager;
 	private taskRepository: TaskRepository;
@@ -17,11 +15,13 @@ export class TaskManager {
 	private calculator: TaskCalculator;
 	private errorHandler: ErrorHandler;
 
-
 	/**
 	 * Helper to wrap project-level calculator calls with error handling
 	 */
-	private async wrapProjectCalc<T>(fn: () => Promise<T | null>, notFoundMsg = 'Project not found'): Promise<Result<T>> {
+	private async wrapProjectCalc<T>(
+		fn: () => Promise<T | null>,
+		notFoundMsg = 'Project not found'
+	): Promise<Result<T>> {
 		try {
 			const v = await fn();
 			if (v === null)
@@ -129,7 +129,7 @@ export class TaskManager {
 			parentTaskIds: (v) => {
 				if (Array.isArray(v)) task.parentTaskIds = v as string[];
 			},
-    	};
+		};
 
 		for (const key of Object.keys(updates)) {
 			const value = (updates as any)[key];
@@ -182,8 +182,9 @@ export class TaskManager {
 		return await this.calculator.getLatestStartDate(taskIds);
 	}
 
-	async getGroupTimespan(taskIds: string[]): 
-	Promise<{ earliestDeadline: Date | null; latestStartDate: Date | null; taskCount: number }> {
+	async getGroupTimespan(
+		taskIds: string[]
+	): Promise<{ earliestDeadline: Date | null; latestStartDate: Date | null; taskCount: number }> {
 		return await this.calculator.getGroupTimespan(taskIds);
 	}
 
@@ -225,19 +226,23 @@ export class TaskManager {
 		}
 	}
 
-	async getProjectTimespan(anyTaskId: string): Promise<Result<{
-		earliestDeadline: Date | null;
-		latestStartDate: Date | null;
-		taskCount: number;
-		rootTaskIds: string[];
-	}>> {
+	async getProjectTimespan(anyTaskId: string): Promise<
+		Result<{
+			earliestDeadline: Date | null;
+			latestStartDate: Date | null;
+			taskCount: number;
+			rootTaskIds: string[];
+		}>
+	> {
 		await this.refreshTaskStates();
 		return this.wrapProjectCalc(() => this.calculator.getProjectTimespan(anyTaskId));
 	}
 
 	async getProjectTotalEstimatedDuration(anyTaskId: string): Promise<Result<number>> {
 		await this.refreshTaskStates();
-		return this.wrapProjectCalc(() => this.calculator.getProjectTotalEstimatedDuration(anyTaskId));
+		return this.wrapProjectCalc(() =>
+			this.calculator.getProjectTotalEstimatedDuration(anyTaskId)
+		);
 	}
 
 	async getProjectAveragePriority(anyTaskId: string): Promise<Result<number>> {
