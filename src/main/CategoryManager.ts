@@ -1,18 +1,11 @@
 import { CategoryRepository } from './CategoryRepository';
-import { type Category, type ICategoryJSON } from './Category';
+import { type ICategoryJSON } from './Category';
 
 export class CategoryManager {
 	private readonly categoryRepository: CategoryRepository;
 
 	constructor() {
 		this.categoryRepository = new CategoryRepository();
-	}
-
-	private toJSON(category: Category): ICategoryJSON {
-		return {
-			id: category.id,
-			title: category.title,
-		};
 	}
 
 	private async validateTitle(title: string, currentId?: number): Promise<string> {
@@ -33,13 +26,13 @@ export class CategoryManager {
 
 	async listCategories(): Promise<ICategoryJSON[]> {
 		const categories = await this.categoryRepository.findAll();
-		return categories.map((c) => this.toJSON(c));
+		return categories.map((c) => c.toJSON());
 	}
 
 	async addCategory(title: string): Promise<ICategoryJSON> {
 		const validatedTitle = await this.validateTitle(title);
 		const newCategory = await this.categoryRepository.create(validatedTitle);
-		return this.toJSON(newCategory);
+		return newCategory.toJSON();
 	}
 
 	async removeCategory(id: number): Promise<boolean> {
@@ -48,13 +41,13 @@ export class CategoryManager {
 
 	async getCategory(id: number): Promise<ICategoryJSON | null> {
 		const category = await this.categoryRepository.findById(id);
-		return category ? this.toJSON(category) : null;
+		return category?.toJSON() ?? null;
 	}
 
 	async renameCategory(id: number, newTitle: string): Promise<ICategoryJSON | null> {
 		const validatedTitle = await this.validateTitle(newTitle, id);
 		const updatedCategory = await this.categoryRepository.update(id, { title: validatedTitle });
-		return updatedCategory ? this.toJSON(updatedCategory) : null;
+		return updatedCategory?.toJSON() ?? null;
 	}
 }
 

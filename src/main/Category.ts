@@ -15,4 +15,11 @@ export class Category {
 
 	@CreateDateColumn()
 	createdAt!: Date;
+
+	toJSON(): ICategoryJSON {
+		return {
+			id: this.id,
+			title: this.title,
+		};
+	}
 }
