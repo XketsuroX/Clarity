@@ -194,4 +194,25 @@ export class TaskDependencyManager {
 		await traverse(taskId);
 		return descendants;
 	}
+	
+	/**
+	 * Collect all task IDs that belong to the project containing `anyTaskId`.
+	 * Returns both the deduplicated list of task IDs and the root ancestor IDs.
+	 */
+	async collectProjectTaskIds(anyTaskId: string): Promise<{ allTaskIds: string[]; rootIds: string[] } | null> {
+		const task = await this.taskRepository.getTaskById(anyTaskId);
+		if (!task) return null;
+
+		const rootTasks = await this.getRootTasksForTask(anyTaskId);
+		const rootIds = rootTasks.length > 0 ? rootTasks.map((r) => r.id) : [anyTaskId];
+
+		const allTaskIdSet = new Set<string>();
+		for (const rootId of rootIds) {
+			allTaskIdSet.add(rootId);
+			const descendantsJSON = await this.getAllDescendants(rootId);
+			for (const desc of descendantsJSON) allTaskIdSet.add(desc.id);
+		}
+
+		return { allTaskIds: Array.from(allTaskIdSet), rootIds };
+	}
 }
