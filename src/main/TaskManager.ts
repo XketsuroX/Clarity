@@ -5,6 +5,9 @@ import { CategoryManager, categoryManager } from './CategoryManager';
 import { TaskRepository } from './TaskRepository';
 import { TaskDependencyManager } from './TaskDependencyManager';
 import { TaskCalculator } from './TaskCalculator';
+import { ErrorHandler, Result } from './ErrorHandler';
+
+
 
 export class TaskManager {
 	private static instance: TaskManager;
@@ -12,12 +15,29 @@ export class TaskManager {
 	private categoryManager: CategoryManager;
 	private dependencyManager: TaskDependencyManager;
 	private calculator: TaskCalculator;
+	private errorHandler: ErrorHandler;
+
+
+	/**
+	 * Helper to wrap project-level calculator calls with error handling
+	 */
+	private async wrapProjectCalc<T>(fn: () => Promise<T | null>, notFoundMsg = 'Project not found'): Promise<Result<T>> {
+		try {
+			const v = await fn();
+			if (v === null)
+				return { ok: false, error: { code: 'NOT_FOUND', message: notFoundMsg } };
+			return { ok: true, value: v };
+		} catch (e) {
+			return { ok: false, error: this.errorHandler.formatError(e) };
+		}
+	}
 
 	private constructor(injectedCategoryManager?: CategoryManager) {
 		this.taskRepository = new TaskRepository();
 		this.categoryManager = injectedCategoryManager ?? categoryManager;
 		this.dependencyManager = new TaskDependencyManager(this.taskRepository);
-		this.calculator = new TaskCalculator(this.taskRepository);
+		this.calculator = new TaskCalculator(this.taskRepository, this.dependencyManager);
+		this.errorHandler = new ErrorHandler();
 	}
 
 	static getInstance(): TaskManager {
@@ -89,19 +109,39 @@ export class TaskManager {
 	async updateTask(id: string, updates: Partial<ITaskJSON>): Promise<ITaskJSON | null> {
 		const task = await this.taskRepository.getTaskById(id);
 		if (!task) return null;
-		if (updates.title) task.title = updates.title;
-		if (updates.description) task.description = updates.description;
-		if (updates.deadline) task.deadline = new Date(updates.deadline);
-		if (updates.startDate) task.startDate = new Date(updates.startDate);
-		if (updates.completed !== undefined) task.completed = updates.completed;
-		if (updates.categoryId !== undefined) task.categoryId = updates.categoryId;
-		if (updates.priority !== undefined) task.priority = updates.priority;
-		if (updates.estimateDurationHour !== undefined)
-			task.estimateDurationHour = updates.estimateDurationHour;
-		if (updates.isRoot !== undefined) task.isRoot = updates.isRoot;
-		if (updates.tags) task.tags = updates.tags;
-		if (updates.childrenTaskIds) task.childrenTaskIds = updates.childrenTaskIds;
-		if (updates.parentTaskIds) task.parentTaskIds = updates.parentTaskIds;
+
+		const handlers: Record<string, (value: any) => void> = {
+			title: (v) => (task.title = String(v)),
+			description: (v) => (task.description = String(v)),
+			deadline: (v) => (task.deadline = v instanceof Date ? v : new Date(String(v))),
+			startDate: (v) => (task.startDate = v instanceof Date ? v : new Date(String(v))),
+			completed: (v) => (task.completed = Boolean(v)),
+			categoryId: (v) => (task.categoryId = v === null ? null : Number(v)),
+			priority: (v) => (task.priority = Number(v)),
+			estimateDurationHour: (v) => (task.estimateDurationHour = Number(v)),
+			isRoot: (v) => (task.isRoot = Boolean(v)),
+			tags: (v) => {
+				if (Array.isArray(v)) task.tags = v as Tag[];
+			},
+			childrenTaskIds: (v) => {
+				if (Array.isArray(v)) task.childrenTaskIds = v as string[];
+			},
+			parentTaskIds: (v) => {
+				if (Array.isArray(v)) task.parentTaskIds = v as string[];
+			},
+    	};
+
+		for (const key of Object.keys(updates)) {
+			const value = (updates as any)[key];
+			const handler = handlers[key];
+			if (handler) {
+				handler(value);
+			} else {
+				// optional: log unexpected keys
+				// console.warn(`updateTask: unknown field '${key}'`);
+			}
+		}
+
 		this.taskRepository.updateTask(id, task);
 		return task.toJSON();
 	}
@@ -142,9 +182,8 @@ export class TaskManager {
 		return await this.calculator.getLatestStartDate(taskIds);
 	}
 
-	async getGroupTimespan(
-		taskIds: string[]
-	): Promise<{ earliestDeadline: Date | null; latestStartDate: Date | null; taskCount: number }> {
+	async getGroupTimespan(taskIds: string[]): 
+	Promise<{ earliestDeadline: Date | null; latestStartDate: Date | null; taskCount: number }> {
 		return await this.calculator.getGroupTimespan(taskIds);
 	}
 
@@ -186,40 +225,38 @@ export class TaskManager {
 		}
 	}
 
-	/**
-	 * Get scheduling information for a task (earliest start, latest finish, slack, criticality)
-	 * Automatically refreshes task states before calculation
-	 */
-	async getTaskSchedule(taskId: string): ReturnType<TaskCalculator['getTaskSchedule']> {
+	async getProjectTimespan(anyTaskId: string): Promise<Result<{
+		earliestDeadline: Date | null;
+		latestStartDate: Date | null;
+		taskCount: number;
+		rootTaskIds: string[];
+	}>> {
 		await this.refreshTaskStates();
-		return this.calculator.getTaskSchedule(taskId);
+		return this.wrapProjectCalc(() => this.calculator.getProjectTimespan(anyTaskId));
+	}
+
+	async getProjectTotalEstimatedDuration(anyTaskId: string): Promise<Result<number>> {
+		await this.refreshTaskStates();
+		return this.wrapProjectCalc(() => this.calculator.getProjectTotalEstimatedDuration(anyTaskId));
+	}
+
+	async getProjectAveragePriority(anyTaskId: string): Promise<Result<number>> {
+		await this.refreshTaskStates();
+		return this.wrapProjectCalc(() => this.calculator.getProjectAveragePriority(anyTaskId));
+	}
+
+	async getProjectCompletionRate(anyTaskId: string): Promise<Result<number>> {
+		await this.refreshTaskStates();
+		return this.wrapProjectCalc(() => this.calculator.getProjectCompletionRate(anyTaskId));
 	}
 
 	/**
 	 * Get the critical path for a project (chain of tasks with zero slack)
 	 * Automatically refreshes task states before calculation
 	 */
-	async getProjectCriticalPath(rootTaskIds: string[]): Promise<string[]> {
+	async getProjectCriticalPath(anyTaskId: string): Promise<Result<string[]>> {
 		await this.refreshTaskStates();
-		return this.calculator.getCriticalPath(rootTaskIds);
-	}
-
-	/**
-	 * Get earliest start time for a task
-	 * Automatically refreshes task states before calculation
-	 */
-	async getTaskEarliestStart(taskId: string): Promise<Date | null> {
-		await this.refreshTaskStates();
-		return this.calculator.calculateEarliestStartTime(taskId);
-	}
-
-	/**
-	 * Get latest finish time for a task
-	 * Automatically refreshes task states before calculation
-	 */
-	async getTaskLatestFinish(taskId: string): Promise<Date | null> {
-		await this.refreshTaskStates();
-		return this.calculator.calculateLatestFinishTime(taskId);
+		return this.wrapProjectCalc(() => this.calculator.getProjectCriticalPath(anyTaskId));
 	}
 }
 
