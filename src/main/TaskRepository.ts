@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { AppDataSource } from './Database';
 import { Task, ITaskJSON } from './Task';
 
@@ -22,33 +22,49 @@ export class TaskRepository {
 			const repo = manager.getRepository(Task);
 			const saved = await repo.save(task);
 
-			// link parents -> this
-			for (const pid of parentIds) {
-				const parent = await repo.findOneBy({ id: pid });
-				if (!parent) throw new Error(`PARENT_NOT_FOUND:${pid}`);
-				if (!parent.childrenTaskIds.includes(saved.id)) {
-					parent.childrenTaskIds = Array.from(new Set([...(parent.childrenTaskIds || []), saved.id]));
-					await repo.save(parent);
-				}
-				// ensure child's parent list will include pid
-			}
-
-			// set saved.parentTaskIds if provided
+			// Bulk fetch parents and children to avoid N+1 queries
 			if (parentIds.length > 0) {
+				const parents = await repo.find({ where: { id: In(parentIds) } });
+				// detect missing parents
+				const foundParentIds = new Set(parents.map((p) => p.id));
+				const missingParents = parentIds.filter((id) => !foundParentIds.has(id));
+				if (missingParents.length > 0) throw new Error(`PARENT_NOT_FOUND:${missingParents.join(',')}`);
+
+				// update parents' children lists in-memory
+				for (const parent of parents) {
+					if (!parent.childrenTaskIds) parent.childrenTaskIds = [];
+					if (!parent.childrenTaskIds.includes(saved.id)) {
+						parent.childrenTaskIds = Array.from(new Set([...parent.childrenTaskIds, saved.id]));
+					}
+				}
+
+				// persist parents in bulk
+				await repo.save(parents);
+
+				// update saved.parentTaskIds and mark not root
 				saved.parentTaskIds = Array.from(new Set([...(saved.parentTaskIds || []), ...parentIds]));
 				saved.isRoot = false;
 				await repo.save(saved);
 			}
 
-			// link this -> children
-			for (const cid of childIds) {
-				const child = await repo.findOneBy({ id: cid });
-				if (!child) throw new Error(`CHILD_NOT_FOUND:${cid}`);
-				if (!child.parentTaskIds.includes(saved.id)) {
-					child.parentTaskIds = Array.from(new Set([...(child.parentTaskIds || []), saved.id]));
-					child.isRoot = false;
-					await repo.save(child);
+			if (childIds.length > 0) {
+				const children = await repo.find({ where: { id: In(childIds) } });
+				// detect missing children
+				const foundChildIds = new Set(children.map((c) => c.id));
+				const missingChildren = childIds.filter((id) => !foundChildIds.has(id));
+				if (missingChildren.length > 0) throw new Error(`CHILD_NOT_FOUND:${missingChildren.join(',')}`);
+
+				// update children parent lists in-memory
+				for (const child of children) {
+					if (!child.parentTaskIds) child.parentTaskIds = [];
+					if (!child.parentTaskIds.includes(saved.id)) {
+						child.parentTaskIds = Array.from(new Set([...child.parentTaskIds, saved.id]));
+						child.isRoot = false;
+					}
 				}
+
+				// persist children in bulk
+				await repo.save(children);
 			}
 
 			return saved;
@@ -64,23 +80,24 @@ export class TaskRepository {
 			const task = await repo.findOneBy({ id });
 			if (!task) return false;
 
-			// remove this id from parents' children arrays
-			for (const pid of task.parentTaskIds || []) {
-				const parent = await repo.findOneBy({ id: pid });
-				if (parent) {
+			// Bulk update parents and children to remove this id from their lists
+			const parentIds = task.parentTaskIds || [];
+			if (parentIds.length > 0) {
+				const parents = await repo.find({ where: { id: In(parentIds) } });
+				for (const parent of parents) {
 					parent.childrenTaskIds = (parent.childrenTaskIds || []).filter((c) => c !== id);
-					await repo.save(parent);
 				}
+				await repo.save(parents);
 			}
 
-			// remove this id from children's parent arrays
-			for (const cid of task.childrenTaskIds || []) {
-				const child = await repo.findOneBy({ id: cid });
-				if (child) {
+			const childIds = task.childrenTaskIds || [];
+			if (childIds.length > 0) {
+				const children = await repo.find({ where: { id: In(childIds) } });
+				for (const child of children) {
 					child.parentTaskIds = (child.parentTaskIds || []).filter((p) => p !== id);
 					if ((child.parentTaskIds || []).length === 0) child.isRoot = true;
-					await repo.save(child);
 				}
+				await repo.save(children);
 			}
 
 			await repo.delete(id);
@@ -99,12 +116,12 @@ export class TaskRepository {
 			if (!parent) throw new Error(`PARENT_NOT_FOUND:${parentId}`);
 			if (!child) throw new Error(`CHILD_NOT_FOUND:${childId}`);
 
-			if (!parent.childrenTaskIds.includes(childId)) {
+			if (!(parent.childrenTaskIds || []).includes(childId)) {
 				parent.childrenTaskIds = Array.from(new Set([...(parent.childrenTaskIds || []), childId]));
 				await repo.save(parent);
 			}
 
-			if (!child.parentTaskIds.includes(parentId)) {
+			if (!(child.parentTaskIds || []).includes(parentId)) {
 				child.parentTaskIds = Array.from(new Set([...(child.parentTaskIds || []), parentId]));
 				child.isRoot = false;
 				await repo.save(child);
