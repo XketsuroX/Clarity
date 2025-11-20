@@ -19,32 +19,20 @@ export class TaskDependencyManager {
 	 * @returns Updated parent task or null if not found/cycle detected
 	 */
 	async addParent(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
+		// Validate targets exist first
 		const parent = await this.taskRepository.getTaskById(parentTaskId);
 		const child = await this.taskRepository.getTaskById(childTaskId);
 		if (!parent || !child) return null;
 
-		// Check for cycles before adding
+		// Check for cycles before adding — abort the operation if it would create one
 		if (await this.wouldCreateCycle(childTaskId, parentTaskId)) {
-			console.warn(
-				`Adding parent ${parentTaskId} to child ${childTaskId} would create a cycle`
-			);
-			return null;
+			throw new Error(`ADDING_PARENT_WOULD_CREATE_CYCLE:${parentTaskId}->${childTaskId}`);
 		}
 
-		// Add child to parent's children list
-		if (!parent.childrenTaskIds.includes(childTaskId)) {
-			parent.childrenTaskIds.push(childTaskId);
-			this.taskRepository.updateTask(parentTaskId, parent);
-		}
-
-		// Add parent to child's parents list
-		if (!child.parentTaskIds.includes(parentTaskId)) {
-			child.parentTaskIds.push(parentTaskId);
-			child.isRoot = false;
-			this.taskRepository.updateTask(childTaskId, child);
-		}
-
-		return parent.toJSON();
+		// Delegate atomic relation update to repository (transactional). Repository
+		// methods throw on missing targets or other conflicts so the whole
+		// operation is aborted/rolled back.
+		return await this.taskRepository.addParentRelation(parentTaskId, childTaskId);
 	}
 
 	/**
@@ -54,24 +42,14 @@ export class TaskDependencyManager {
 	 * @returns Updated parent task or null if not found
 	 */
 	async removeParent(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
+		// Validate targets exist first
 		const parent = await this.taskRepository.getTaskById(parentTaskId);
 		const child = await this.taskRepository.getTaskById(childTaskId);
 		if (!parent || !child) return null;
 
-		// Remove child from parent's children list
-		parent.childrenTaskIds = parent.childrenTaskIds.filter((id) => id !== childTaskId);
-		this.taskRepository.updateTask(parentTaskId, parent);
-
-		// Remove parent from child's parents list
-		child.parentTaskIds = child.parentTaskIds.filter((id) => id !== parentTaskId);
-
-		// Set isRoot to true only if child has no other parents
-		if (child.parentTaskIds.length === 0) {
-			child.isRoot = true;
-		}
-		this.taskRepository.updateTask(childTaskId, child);
-
-		return parent.toJSON();
+		// Delegate atomic unlink to repository. Repository will throw on missing
+		// targets or other conflicts; caller can handle/propagate the error.
+		return await this.taskRepository.removeParentRelation(parentTaskId, childTaskId);
 	}
 
 	/**

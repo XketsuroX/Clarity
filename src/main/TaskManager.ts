@@ -86,46 +86,16 @@ export class TaskManager {
 			childrenTaskIds,
 			parentTaskIds
 		);
-		// add task to repository (supports sync or async implementations)
-		await Promise.resolve(this.taskRepository.addTask(task));
-
-		// Wire up declared parent/child relationships.
-		// Use Promise.all so we attempt all links, but don't fail the whole operation
-		// if one link cannot be created. Individual failures are ignored here
-		// because the task itself was already created; callers can validate
-		// relationships separately if needed.
-		const parentPromises = parentTaskIds.map((parentId) =>
-			this.dependencyManager.addParent(parentId, id).catch(() => null)
-		);
-		const childPromises = childrenTaskIds.map((childId) =>
-			this.dependencyManager.addParent(id, childId).catch(() => null)
-		);
-
-		await Promise.all([...parentPromises, ...childPromises]);
-
-		return task.toJSON();
+		// Persist the task and its declared relations atomically via repository
+		// helper. This will throw on missing parents/children so callers will
+		// receive an error and the whole operation will be aborted.
+		const saved = await this.taskRepository.addTaskWithRelations(task, parentTaskIds, childrenTaskIds);
+		return saved.toJSON();
 	}
 
 	async removeTask(id: string): Promise<boolean> {
-		// Fetch the task so we can remove its relationships first
-		const task = await this.taskRepository.getTaskById(id);
-		if (!task) return false;
-
-		// Attempt to remove parent links (parent -> this)
-		const parentPromises = (task.parentTaskIds || []).map((parentId) =>
-			this.dependencyManager.removeParent(parentId, id).catch(() => null)
-		);
-
-		// Attempt to remove child links (this -> child)
-		const childPromises = (task.childrenTaskIds || []).map((childId) =>
-			this.dependencyManager.removeParent(id, childId).catch(() => null)
-		);
-
-		// Wait for all unlink operations to complete (ignore individual failures)
-		await Promise.all([...parentPromises, ...childPromises]);
-
-		// Finally remove the task from repository
-		return await this.taskRepository.removeTask(id);
+		// Use repository helper to remove task and clean up relations atomically.
+		return await this.taskRepository.removeTaskWithRelations(id);
 	}
 
 	async toggleComplete(id: string): Promise<ITaskJSON | null> {
