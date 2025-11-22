@@ -47,6 +47,20 @@ export class TaskManager {
 		return newTask.toJSON();
 	}
 
+	// Change a task from Scheduled -> In Progress
+	async startTask(id: number): Promise<ITaskJSON | null> {
+		const task = await this.taskRepository.findById(id);
+		if (!task) return null;
+		// Only start if currently scheduled
+		if (task.state !== 'Scheduled') return null;
+
+		const updatedTask = await this.taskRepository.update(id, {
+			state: 'In Progress',
+			startDate: new Date(),
+		});
+		return updatedTask?.toJSON() ?? null;
+	}
+
 	async removeTask(id: number): Promise<boolean> {
 		return await this.taskRepository.delete(id);
 	}
@@ -54,8 +68,22 @@ export class TaskManager {
 	async toggleComplete(id: number): Promise<ITaskJSON | null> {
 		const task = await this.taskRepository.findById(id);
 		if (!task) return null;
+
+		const newCompleted = !task.completed;
+
+		// If attempting to mark completed, ensure all immediate children are completed
+		if (newCompleted) {
+			const children = task.childrenTasks || [];
+			const incomplete = children.find((c) => !c.completed);
+			if (incomplete) {
+				throw new Error('All child tasks must be completed before marking this task as completed');
+			}
+		}
+		const newState = newCompleted ? 'Completed' : (task.deadline && task.deadline.getTime() < Date.now() ? 'Overdue' : 'In Progress');
+
 		const updatedTask = await this.taskRepository.update(id, {
-			completed: !task.completed,
+			completed: newCompleted,
+			state: newState,
 		});
 		return updatedTask?.toJSON() ?? null;
 	}
@@ -88,94 +116,43 @@ export class TaskManager {
 		return await this.dependencyManager.getAllDescendants(taskId);
 	}
 
-	async getEarliestDeadline(taskIds: number[]): Promise<Date | null> {
-		return await this.calculator.getEarliestDeadline(taskIds);
-	}
-
-	async getLatestStartDate(taskIds: number[]): Promise<Date | null> {
-		return await this.calculator.getLatestStartDate(taskIds);
-	}
-
-	async getGroupTimespan(
-		taskIds: number[]
-	): Promise<{ earliestDeadline: Date | null; latestStartDate: Date | null; taskCount: number }> {
-		return await this.calculator.getGroupTimespan(taskIds);
-	}
-
-	async getTotalEstimatedDuration(taskIds: number[]): Promise<number> {
-		return await this.calculator.getTotalEstimatedDuration(taskIds);
-	}
-
-	async getAveragePriority(taskIds: number[]): Promise<number> {
-		return await this.calculator.getAveragePriority(taskIds);
-	}
-
-	async getCompletionRate(taskIds: number[]): Promise<number> {
-		return await this.calculator.getCompletionRate(taskIds);
-	}
-
 	/**
 	 * Refresh task states for all tasks (recalculate state based on current date and deadline)
 	 * Useful to call before scheduling calculations to ensure accurate state
 	 */
-	async refreshTaskStates(): Promise<void> {
-		const allTasks = await this.listTasks();
-		const now = new Date();
-
-		for (const taskJSON of allTasks) {
-			const task = await this.taskRepository.findById(taskJSON.id);
-			if (!task) continue;
-
-			// Recalculate state based on current status
-			if (task.completed) {
-				// State stays 'Completed'
-			} else if (task.deadline && task.deadline.getTime() < now.getTime()) {
-				// Mark as overdue if deadline passed
-				task.toJSON(); // state will be 'Overdue'
-			} else {
-				// In Progress
+	/**
+	 * Refresh persisted overdue states: find tasks where deadline passed and state is not Completed/Overdue
+	 * and set their state to 'Overdue'. This makes overdue queryable in DB.
+	 */
+	async refreshOverdue(): Promise<void> {
+		const tasks = await this.taskRepository.findAll();
+		const now = Date.now();
+		for (const task of tasks) {
+			if (task.completed) continue;
+			if (task.deadline && task.deadline.getTime() < now && task.state !== 'Overdue') {
+				await this.taskRepository.update(task.id, { state: 'Overdue' });
 			}
-
-			// Task states are computed via toJSON(), no need to update DB
 		}
 	}
 
-	async getProjectTimespan(anyTaskId: number): Promise<
-		Result<{
-			earliestDeadline: Date | null;
-			latestStartDate: Date | null;
-			taskCount: number;
-			rootTaskIds: number[];
-		}>
-	> {
-		await this.refreshTaskStates();
-		return this.wrapProjectCalc(() => this.calculator.getProjectTimespan(anyTaskId));
-	}
-
-	async getProjectTotalEstimatedDuration(anyTaskId: number): Promise<Result<number>> {
-		await this.refreshTaskStates();
-		return this.wrapProjectCalc(() =>
-			this.calculator.getProjectTotalEstimatedDuration(anyTaskId)
-		);
-	}
-
-	async getProjectAveragePriority(anyTaskId: number): Promise<Result<number>> {
-		await this.refreshTaskStates();
-		return this.wrapProjectCalc(() => this.calculator.getProjectAveragePriority(anyTaskId));
-	}
-
-	async getProjectCompletionRate(anyTaskId: number): Promise<Result<number>> {
-		await this.refreshTaskStates();
-		return this.wrapProjectCalc(() => this.calculator.getProjectCompletionRate(anyTaskId));
+	/**
+	 * Get project completeness by delegating to getTaskCompleteness on the project root.
+	 * Refreshes overdue states first and returns a Result<number>.
+	 */
+	async getProjectCompleteness(anyTaskId: number): Promise<Result<number>> {
+		await this.refreshOverdue();
+		return this.wrapProjectCalc(async () => {
+			const root = await this.dependencyManager.getProjectRoot(anyTaskId);
+			if (!root) return null;
+			return await this.calculator.getTaskCompleteness(root.id);
+		}, 'Project not found');
 	}
 
 	/**
-	 * Get the critical path for a project (chain of tasks with zero slack)
-	 * Automatically refreshes task states before calculation
+	 * Get urgency for a single task (0..100). Proxy to TaskCalculator.
 	 */
-	async getProjectCriticalPath(anyTaskId: number): Promise<Result<number[]>> {
-		await this.refreshTaskStates();
-		return this.wrapProjectCalc(() => this.calculator.getProjectCriticalPath(anyTaskId));
+	async getTaskUrgency(taskId: number, windowDays = 30): Promise<number> {
+		return await this.calculator.getTaskUrgency(taskId, windowDays);
 	}
 }
 

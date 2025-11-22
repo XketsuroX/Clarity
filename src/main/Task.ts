@@ -11,7 +11,7 @@ import {
 import { Tag } from './Tag';
 import { Category } from './Category';
 
-export type TaskState = 'Completed' | 'In Progress' | 'Overdue';
+export type TaskState = 'Completed' | 'In Progress' | 'Overdue' | 'Scheduled';
 
 export interface ITaskJSON {
 	id: number;
@@ -48,6 +48,9 @@ export class Task {
 	@Column({ type: 'boolean', default: false })
 	completed!: boolean;
 
+	@Column({ type: 'enum', enum: ['Completed', 'In Progress', 'Overdue', 'Scheduled'], default: 'Scheduled' })
+	state!: TaskState;
+
 	@ManyToOne(() => Category, (category) => category.tasks, {
 		onDelete: 'SET NULL',
 		nullable: true,
@@ -70,12 +73,8 @@ export class Task {
 	@TreeParent()
 	parentTask!: Task | null;
 
-	get state(): TaskState {
-		if (this.completed) return 'Completed';
-		const now = new Date();
-		if (this.deadline && this.deadline.getTime() < now.getTime()) return 'Overdue';
-		return 'In Progress';
-	}
+	// `state` is persisted on the entity. Time-based transitions (e.g. Overdue)
+	// are applied by TaskManager.refreshOverdue().
 
 	toJSON(): ITaskJSON {
 		return {

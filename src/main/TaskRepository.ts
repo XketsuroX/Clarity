@@ -1,12 +1,13 @@
 import { DeepPartial, Repository } from 'typeorm';
 import { AppDataSource } from './Database';
-import { Task } from './Task';
+import { Task, TaskState } from './Task';
 
 export interface CreateTaskData {
 	title: string;
 	description?: string;
 	deadline?: Date;
 	startDate?: Date;
+	state?: TaskState;
 	categoryId?: number;
 	tagIds?: number[];
 	priority?: number;
@@ -19,6 +20,7 @@ export interface UpdateTaskData {
 	description?: string;
 	deadline?: Date | null;
 	startDate?: Date | null;
+	state?: TaskState;
 	completed?: boolean;
 	categoryId?: number | null;
 	tagIds?: number[];
@@ -132,6 +134,11 @@ export class TaskRepository {
 		return this.ormRepository.count();
 	}
 
+	async getState(id: number): Promise<TaskState | null> {
+		const task = await this.findById(id);
+		return task ? task.state : null;
+	}
+
 	/**
 	 * Delete all tasks
 	 */
@@ -141,5 +148,17 @@ export class TaskRepository {
 
 	async findDescendants(task: Task): Promise<Task[]> {
 		return this.ormRepository.manager.getTreeRepository(Task).findDescendants(task);
+	}
+
+	/**
+	 * Return the tree-shaped descendants for a task (includes the task as root)
+	 */
+	async findDescendantsTree(task: Task): Promise<Task | null> {
+		try {
+			const tree = await this.ormRepository.manager.getTreeRepository(Task).findDescendantsTree(task);
+			return tree ?? null;
+		} catch (e) {
+			return null;
+		}
 	}
 }

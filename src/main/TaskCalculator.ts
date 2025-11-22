@@ -28,361 +28,115 @@ export class TaskCalculator {
 	}
 
 	/**
-	 * Get the earliest deadline from a list of task IDs
-	 * @param taskIds - list of task IDs
-	 * @returns earliest deadline Date or null if no tasks found
+	 * Compute completeness for a single task using the formula:
+	 * (sum(children durations where state is In Progress or Scheduled) + task duration) /
+	 * (sum(children durations where state != Overdue) + task duration)
+	 * Throws SchedulingError('OVERDUE_TASK') if any involved task is Overdue.
 	 */
-	async getEarliestDeadline(taskIds: number[]): Promise<Date | null> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
-		const validTasks = tasks.filter((t) => t !== null) as Task[];
+	async getTaskCompleteness(taskId: number): Promise<number> {
+		const task = await this.taskRepository.findById(taskId);
+		if (!task) throw new TaskCalculator.SchedulingError('NOT_FOUND', 'Task not found', { taskId });
 
-		if (validTasks.length === 0) return null;
+		// If the task itself is overdue and not completed, abort
+		if (task.state === 'Overdue')
+			throw new TaskCalculator.SchedulingError(
+				'OVERDUE_TASK',
+				`Task ${task.id} is overdue`,
+				{ taskId: task.id }
+			);
 
-		const earliest = validTasks.reduce((earliest: Date, task) => {
-			return task.deadline.getTime() < earliest.getTime() ? task.deadline : earliest;
-		}, validTasks[0].deadline);
+		// Fetch all descendants (children, grandchildren, ...). Use repository tree helper.
+		const descendants = (await this.taskRepository.findDescendants(task)).filter(
+			(t) => t.id !== task.id
+		);
 
-		return earliest;
-	}
-
-	/**
-	 * Get the latest start date from a list of task IDs
-	 * @param taskIds - list of task IDs
-	 * @returns latest start date Date or null if no tasks found
-	 */
-	async getLatestStartDate(taskIds: number[]): Promise<Date | null> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
-		const validTasks = tasks.filter((t) => t !== null) as Task[];
-
-		if (validTasks.length === 0) return null;
-
-		const latest = validTasks.reduce((latest: Date, task) => {
-			return task.startDate.getTime() > latest.getTime() ? task.startDate : latest;
-		}, validTasks[0].startDate);
-
-		return latest;
-	}
-
-	/**
-	 * Get deadline info for a task group: earliest deadline and latest start date
-	 * Useful for understanding temporal bounds of a project/group
-	 */
-	async getGroupTimespan(taskIds: number[]): Promise<{
-		earliestDeadline: Date | null;
-		latestStartDate: Date | null;
-		taskCount: number;
-	}> {
-		const earliestDeadline = await this.getEarliestDeadline(taskIds);
-		const latestStartDate = await this.getLatestStartDate(taskIds);
-
-		return {
-			earliestDeadline,
-			latestStartDate,
-			taskCount: taskIds.length,
-		};
-	}
-
-	/**
-	 * Get deadline info for a project given any task in the project.
-	 * This finds the root ancestor(s) using `getRootTasksForTask`, then
-	 * aggregates each root and its descendants to compute the project's timespan.
-	 * @param anyTaskId - any task ID within the project (will locate root(s) automatically)
-	 * @returns timespan info for the entire project (covers all roots found)
-	 */
-	async getProjectTimespan(anyTaskId: number): Promise<{
-		earliestDeadline: Date | null;
-		latestStartDate: Date | null;
-		taskCount: number;
-		rootTaskIds: number[];
-	} | null> {
-		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
-		if (!project) return null;
-
-		const timespan = await this.getGroupTimespan(project.allTaskIds);
-
-		return {
-			...timespan,
-			rootTaskIds: project.rootIds,
-		};
-	}
-
-	/**
-	 * Project-level wrappers that accept any task within a project and
-	 * compute group metrics for the entire project (root(s) + descendants).
-	 */
-	async getProjectTotalEstimatedDuration(anyTaskId: number): Promise<number | null> {
-		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
-		if (!project) return null;
-		return this.getTotalEstimatedDuration(project.allTaskIds);
-	}
-
-	async getProjectAveragePriority(anyTaskId: number): Promise<number | null> {
-		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
-		if (!project) return null;
-		return this.getAveragePriority(project.allTaskIds);
-	}
-
-	async getProjectCompletionRate(anyTaskId: number): Promise<number | null> {
-		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
-		if (!project) return null;
-		return this.getCompletionRate(project.allTaskIds);
-	}
-
-	async getProjectCriticalPath(anyTaskId: number): Promise<number[] | null> {
-		const project = await this.dependencyManager.collectProjectTaskIds(anyTaskId);
-		if (!project) return null;
-		// Compute schedules for the whole project in one pass
-		const schedules = await this.calculateProjectSchedules(project.allTaskIds);
-		if (!schedules) return null;
-
-		const criticalTasks: number[] = [];
-		const visited = new Set<number>();
-
-		const traverse = async (taskId: number): Promise<void> => {
-			if (visited.has(taskId)) return;
-			visited.add(taskId);
-			const info = schedules.get(taskId);
-			if (!info) return;
-			if (info.isCritical) {
-				criticalTasks.push(taskId);
-				// descend to children that are critical
-				const task = await this.taskRepository.findById(taskId);
-				if (task) {
-					for (const childId of task.childrenTaskIds) {
-						await traverse(childId);
-					}
-				}
-			}
-		};
-
-		for (const rootId of project.rootIds) {
-			await traverse(rootId);
-		}
-
-		return criticalTasks;
-	}
-
-	/**
-	 * Calculate schedules (earliest start, latest finish, slack) for all tasks in a project.
-	 * Uses a forward/backward pass on a topological order to avoid repeated recursion.
-	 * Returns a Map<taskId, { earliestStart, latestFinish, durationMs, earlyFinish, slack, isCritical }>
-	 * or null if scheduling cannot proceed due to constraints (overdue/missing duration).
-	 */
-	async calculateProjectSchedules(taskIds: number[]): Promise<Map<
-		string,
-		{
-			earliestStart: Date;
-			latestFinish: Date;
-			durationMs: number;
-			earlyFinish: Date;
-			slack: number;
-			isCritical: boolean;
-		}
-	> | null> {
-		// Load all tasks
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
-		const validTasks = tasks.filter((t) => t !== null) as Task[];
-		const taskMap = new Map<number, Task>();
-		for (const t of validTasks) taskMap.set(t.id, t);
-
-		// Basic validation: ensure no overdue or missing duration (per requirements)
-		const now = new Date();
-		for (const t of validTasks) {
-			if (!t.completed && t.estimateDurationHour === 0)
-				throw new TaskCalculator.SchedulingError(
-					'MISSING_DURATION',
-					`Task ${t.id} has no estimated duration`,
-					{ taskId: t.id }
-				);
-			if (!t.completed && t.deadline.getTime() < now.getTime())
+		// If any descendant is overdue and not completed, abort
+		for (const d of descendants) {
+			if (d.state === 'Overdue')
 				throw new TaskCalculator.SchedulingError(
 					'OVERDUE_TASK',
-					`Task ${t.id} is overdue (deadline ${t.deadline.toISOString()})`,
-					{ taskId: t.id }
+					`Descendant task ${d.id} is overdue`,
+					{ descendantId: d.id }
 				);
 		}
 
-		// Build parent/child adjacency limited to project
-		const parents = new Map<number, number[]>();
-		const children = new Map<number, number[]>();
-		for (const id of taskIds) {
-			parents.set(id, []);
-			children.set(id, []);
-		}
-		for (const t of validTasks) {
-			for (const p of t.parentTaskIds) {
-				if (parents.has(t.id) && parents.has(p)) {
-					parents.get(t.id)!.push(p);
-					children.get(p)!.push(t.id);
-				}
-			}
-		}
-
-		// Kahn's algorithm for topological order
-		const indegree = new Map<number, number>();
-		for (const id of taskIds) indegree.set(id, parents.get(id)!.length);
-		const queue: number[] = [];
-		for (const [id, deg] of indegree) if (deg === 0) queue.push(id);
-		const topo: number[] = [];
-		while (queue.length > 0) {
-			const id = queue.shift()!;
-			topo.push(id);
-			for (const c of children.get(id) || []) {
-				indegree.set(c, (indegree.get(c) || 0) - 1);
-				if ((indegree.get(c) || 0) === 0) queue.push(c);
-			}
-		}
-		if (topo.length !== taskIds.length) {
-			// Not a DAG within the provided set
+		// Validate durations (must be > 0 for tasks that participate)
+		const parentDur = task.estimateDurationHour;
+		if ((!parentDur || parentDur <= 0) && !task.completed) {
 			throw new TaskCalculator.SchedulingError(
-				'NOT_A_DAG',
-				'The project graph is not a DAG or contains missing tasks',
-				{ expected: taskIds.length, found: topo.length }
+				'MISSING_DURATION',
+				`Task ${task.id} has no estimated duration`,
+				{ taskId: task.id }
 			);
 		}
 
-		// Forward pass: earliest starts
-		const earliestStart = new Map<number, Date>();
-		for (const id of topo) {
-			const t = taskMap.get(id)!;
-			if (t.parentTaskIds.length === 0 || (parents.get(id) || []).length === 0) {
-				// root within project
-				if (t.completed) earliestStart.set(id, t.startDate);
-				else {
-					const nowOrStart = now.getTime() > t.startDate.getTime() ? now : t.startDate;
-					earliestStart.set(id, nowOrStart);
-				}
-			} else {
-				let maxFinish = new Date(0);
-				for (const p of parents.get(id) || []) {
-					const parent = taskMap.get(p)!;
-					const pEarliest = earliestStart.get(p);
-					if (!pEarliest)
-						throw new TaskCalculator.SchedulingError(
-							'PARENT_UNRESOLVED',
-							`Parent ${p} has no computed earliest start when processing ${id}`,
-							{ parentId: p, taskId: id }
-						);
-					let pFinish: Date;
-					if (parent.completed) {
-						pFinish = parent.deadline; // ignore duration for completed parents
-					} else {
-						const dur = parent.estimateDurationHour * 60 * 60 * 1000;
-						pFinish = new Date(pEarliest.getTime() + dur);
-					}
-					if (pFinish.getTime() > maxFinish.getTime()) maxFinish = pFinish;
-				}
-				// earliest start is max of parent finishes, also respect own startDate
-				const candidate =
-					maxFinish.getTime() > t.startDate.getTime() ? maxFinish : t.startDate;
-				earliestStart.set(id, candidate);
-			}
-		}
-
-		// Compute early finishes
-		const earlyFinish = new Map<number, Date>();
-		for (const id of topo) {
-			const t = taskMap.get(id)!;
-			const es = earliestStart.get(id)!;
-			if (t.completed) {
-				earlyFinish.set(id, t.deadline);
-			} else {
-				const dur = t.estimateDurationHour * 60 * 60 * 1000;
-				earlyFinish.set(id, new Date(es.getTime() + dur));
-			}
-		}
-
-		// Backward pass: latest finishes
-		const latestFinish = new Map<number, Date>();
-		// initialize leaves to their deadlines
-		const reverseTopo = topo.slice().reverse();
-		for (const id of reverseTopo) {
-			const t = taskMap.get(id)!;
-			const childs = children.get(id) || [];
-			if (childs.length === 0) {
-				// leaf
-				latestFinish.set(id, t.deadline);
-			} else {
-				let minChildConstraint: Date | null = null;
-				for (const c of childs) {
-					const cLatest = latestFinish.get(c);
-					if (!cLatest) return null; // unresolved child
-					const childTask = taskMap.get(c)!;
-					let candidate: Date;
-					if (childTask.completed) {
-						// child completed: ignore child's duration
-						candidate = cLatest;
-					} else {
-						const dur = childTask.estimateDurationHour * 60 * 60 * 1000;
-						candidate = new Date(cLatest.getTime() - dur);
-					}
-					if (
-						minChildConstraint === null ||
-						candidate.getTime() < minChildConstraint.getTime()
-					) {
-						minChildConstraint = candidate;
-					}
-				}
-				if (minChildConstraint === null)
+		let activeDescendantsDur = 0;
+		let denomDescendantsDur = 0;
+		for (const d of descendants) {
+			const dur = d.estimateDurationHour;
+			if (!dur || dur <= 0) {
+				if (!d.completed)
 					throw new TaskCalculator.SchedulingError(
-						'CHILD_UNRESOLVED',
-						`Unable to determine child constraints for ${id}`,
-						{ taskId: id }
+						'MISSING_DURATION',
+						`Descendant task ${d.id} has no estimated duration`,
+						{ descendantId: d.id }
 					);
-				latestFinish.set(id, minChildConstraint);
+				else continue; // completed descendant with no duration contributes 0
 			}
+			// denominator includes descendants in any state except Overdue
+			if (d.state !== 'Overdue') denomDescendantsDur += dur;
+			// numerator includes descendants In Progress or Scheduled
+			if (d.state === 'In Progress' || d.state === 'Scheduled') activeDescendantsDur += dur;
 		}
 
-		// Build schedule map
-		const scheduleMap = new Map();
-		for (const id of topo) {
-			const t = taskMap.get(id)!;
-			const es = earliestStart.get(id)!;
-			const ef = earlyFinish.get(id)!;
-			const lf = latestFinish.get(id)!;
-			const dur = t.estimateDurationHour * 60 * 60 * 1000;
-			const slack = lf.getTime() - ef.getTime();
-			scheduleMap.set(id, {
-				earliestStart: es,
-				latestFinish: lf,
-				durationMs: dur,
-				earlyFinish: ef,
-				slack,
-				isCritical: slack === 0,
-			});
+		const numerator = activeDescendantsDur + (parentDur || 0);
+		const denominator = denomDescendantsDur + (parentDur || 0);
+		if (denominator === 0) return 0;
+		return numerator / denominator;
+	}
+
+	/**
+	 * Compute urgency for a single task as an integer 0..100.
+	 * - Completed tasks => 0
+	 * - Overdue tasks => 100
+	 * - Tasks with no deadline => 0
+	 * - For tasks with a deadline within `windowDays`, urgency scales linearly
+	 *   so a deadline today => 100, deadline at windowDays => 0.
+	 */
+	async getTaskUrgency(taskId: number, windowDays = 30): Promise<number> {
+		const task = await this.taskRepository.findById(taskId);
+		if (!task) throw new TaskCalculator.SchedulingError('NOT_FOUND', 'Task not found', { taskId });
+
+		if (task.completed) return 0;
+		if (!task.deadline) return 0;
+
+		// Require duration for non-completed tasks (stricter rule)
+		const durHours = task.estimateDurationHour;
+		if ((!durHours || durHours <= 0) && !task.completed) {
+			throw new TaskCalculator.SchedulingError(
+				'MISSING_DURATION',
+				`Task ${task.id} has no estimated duration`,
+				{ taskId: task.id }
+			);
 		}
 
-		return scheduleMap;
-	}
+		const now = new Date();
+		const msPerDay = 24 * 60 * 60 * 1000;
+		const windowMs = Math.max(1, windowDays) * msPerDay;
+		const durationMs = (durHours || 0) * 60 * 60 * 1000;
 
-	/**
-	 * Calculate total estimated duration for a group of tasks (in hours)
-	 */
-	async getTotalEstimatedDuration(taskIds: number[]): Promise<number> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
-		const validTasks = tasks.filter((t) => t !== null) as Task[];
-		return validTasks.reduce((total, task) => total + task.estimateDurationHour, 0);
-	}
+		// Compute the latest start time required to finish before the deadline
+		const startBy = task.deadline.getTime() - durationMs;
+		const timeToStart = startBy - now.getTime();
 
-	/**
-	 * Get average priority for a task group
-	 */
-	async getAveragePriority(taskIds: number[]): Promise<number> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
-		const validTasks = tasks.filter((t) => t !== null) as Task[];
-		if (validTasks.length === 0) return 0;
-		const total = validTasks.reduce((sum, task) => sum + task.priority, 0);
-		return total / validTasks.length;
-	}
+		// If deadline already passed, treat as maximum urgency
+		if (task.deadline.getTime() - now.getTime() <= 0) return 100;
 
-	/**
-	 * Get completion rate for a task group (0 to 1)
-	 */
-	async getCompletionRate(taskIds: number[]): Promise<number> {
-		const tasks = await Promise.all(taskIds.map((id) => this.taskRepository.findById(id)));
-		const validTasks = tasks.filter((t) => t !== null) as Task[];
-		if (validTasks.length === 0) return 0;
-		const completed = validTasks.filter((t) => t.completed).length;
-		return completed / validTasks.length;
+		if (timeToStart <= 0) return 100;
+		if (timeToStart >= windowMs) return 0;
+
+		const ratio = (windowMs - timeToStart) / windowMs; // 0..1 relative to start-by
+		const urgency = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+		return urgency;
 	}
 }
