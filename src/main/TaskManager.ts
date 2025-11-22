@@ -42,8 +42,87 @@ export class TaskManager {
 		return tasks.map((task) => task.toJSON());
 	}
 
+	/**
+	 * Set a task's completeness value (0..100).
+	 * Only allowed for leaf tasks (no children).
+	 */
+	async setTaskCompleteness(id: number, completeness: number): Promise<ITaskJSON | null> {
+		if (completeness < 0 || completeness > 100)
+			throw new Error('Completeness must be between 0 and 100');
+
+		const task = await this.taskRepository.findById(id);
+		if (!task) return null;
+
+		const children = task.childrenTasks || [];
+		if (children.length > 0) {
+			throw new Error('Can only set completeness on leaf tasks (tasks without children)');
+		}
+
+		const updated = await this.taskRepository.setCompleteness(id, completeness);
+		// Refresh aggregated completeness for parent tasks now that a leaf changed
+		await this.refreshCompleteness(id);
+		return updated?.toJSON() ?? null;
+	}
+
+	/**
+	 * Refresh completeness values for tasks with children by storing their urgency.
+	 * Leaf tasks keep their persisted completeness value which is user-editable.
+	 */
+	private async refreshCompleteness(affectedTaskId?: number): Promise<void> {
+		if (affectedTaskId === undefined) {
+			// full refresh
+			const tasks = await this.taskRepository.findAll();
+			for (const t of tasks) {
+				const full = await this.taskRepository.findById(t.id);
+				if (!full) continue;
+				const hasChildren = (full.childrenTasks || []).length > 0;
+				if (hasChildren) {
+					try {
+						const u = await this.calculator.getTaskUrgency(full.id);
+						await this.taskRepository.setCompleteness(full.id, u);
+					} catch (e) {
+						// ignore urgency calculation failures here (e.g., missing duration) to avoid blocking listing
+					}
+				}
+			}
+			return;
+		}
+
+		// Partial refresh: only recompute for ancestors and affected non-leaf task
+		const idsToUpdate = new Set<number>();
+
+		// include affected task if it has children (non-leaf)
+		const affected = await this.taskRepository.findById(affectedTaskId);
+		if (affected && (affected.childrenTasks || []).length > 0) idsToUpdate.add(affected.id);
+
+		// include ancestors
+		const ancestorIds = await this.dependencyManager.getAncestorIds(affectedTaskId);
+		for (const a of ancestorIds) idsToUpdate.add(a);
+
+		for (const id of idsToUpdate) {
+			const full = await this.taskRepository.findById(id);
+			if (!full) continue;
+			const hasChildren = (full.childrenTasks || []).length > 0;
+			if (!hasChildren) continue; // skip leaves; they are user-editable
+			try {
+				const u = await this.calculator.getTaskUrgency(full.id);
+				await this.taskRepository.setCompleteness(full.id, u);
+			} catch (e) {
+				// ignore urgency calculation failures for partial refresh
+			}
+		}
+	}
+
 	async addTask(data: CreateTaskData): Promise<ITaskJSON> {
 		const newTask = await this.taskRepository.create(data);
+		// If the new task has a parent and that parent is marked Completed,
+		// reopen the parent (centralized in repository) and refresh completeness.
+		const full = await this.taskRepository.findById(newTask.id);
+		if (full?.parentTask) {
+			await this.taskRepository.reopenIfCompleted(full.parentTask.id);
+			// Refresh completeness aggregates for the parent's ancestor chain
+			await this.refreshCompleteness(full.parentTask.id);
+		}
 		return newTask.toJSON();
 	}
 
@@ -54,15 +133,21 @@ export class TaskManager {
 		// Only start if currently scheduled
 		if (task.state !== 'Scheduled') return null;
 
-		const updatedTask = await this.taskRepository.update(id, {
-			state: 'In Progress',
-			startDate: new Date(),
-		});
+		// set actualStartDate if not already set via repository helper
+		const now = new Date();
+		const updatedTask = await this.taskRepository.setActualStart(id, now);
+		await this.refreshCompleteness(id);
 		return updatedTask?.toJSON() ?? null;
 	}
 
 	async removeTask(id: number): Promise<boolean> {
-		return await this.taskRepository.delete(id);
+		// read parent before deleting so we can refresh ancestors
+		const before = await this.taskRepository.findById(id);
+		const parentId = before?.parentTask?.id ?? null;
+		const ok = await this.taskRepository.delete(id);
+		// Update completeness aggregates after removing a task
+		if (parentId) await this.refreshCompleteness(parentId);
+		return ok;
 	}
 
 	async toggleComplete(id: number): Promise<ITaskJSON | null> {
@@ -81,11 +166,23 @@ export class TaskManager {
 		}
 		const newState = newCompleted ? 'Completed' : (task.deadline && task.deadline.getTime() < Date.now() ? 'Overdue' : 'In Progress');
 
-		const updatedTask = await this.taskRepository.update(id, {
-			completed: newCompleted,
-			state: newState,
-		});
-		return updatedTask?.toJSON() ?? null;
+		const now = new Date();
+		if (newCompleted) {
+			// compute actual duration from available start
+			const start = task.actualStartDate ?? task.startDate ?? null;
+			let durHours: number | null = null;
+			if (start) {
+				const durMs = now.getTime() - new Date(start).getTime();
+				durHours = Math.round((durMs / (1000 * 60 * 60)) * 100) / 100; // two decimals
+			}
+			const updatedTask = await this.taskRepository.setCompletion(id, true, 'Completed', now, durHours);
+			await this.refreshCompleteness(id);
+			return updatedTask?.toJSON() ?? null;
+		} else {
+			const updatedTask = await this.taskRepository.setCompletion(id, false, newState, null, null);
+			await this.refreshCompleteness(id);
+			return updatedTask?.toJSON() ?? null;
+		}
 	}
 
 	async getTask(id: number): Promise<ITaskJSON | null> {
@@ -104,7 +201,13 @@ export class TaskManager {
 			}
 		}
 
+		// capture previous parent to refresh its ancestors as well
+		const before = await this.taskRepository.findById(id);
+		const beforeParentId = before?.parentTask?.id ?? null;
 		const updatedTask = await this.taskRepository.update(id, data);
+		// Refresh completeness aggregates after updating a task (parent, duration, etc.)
+		if (beforeParentId) await this.refreshCompleteness(beforeParentId);
+		await this.refreshCompleteness(id);
 		return updatedTask?.toJSON() ?? null;
 	}
 
@@ -130,7 +233,7 @@ export class TaskManager {
 		for (const task of tasks) {
 			if (task.completed) continue;
 			if (task.deadline && task.deadline.getTime() < now && task.state !== 'Overdue') {
-				await this.taskRepository.update(task.id, { state: 'Overdue' });
+				await this.taskRepository.setCompletion(task.id, false, 'Overdue');
 			}
 		}
 	}

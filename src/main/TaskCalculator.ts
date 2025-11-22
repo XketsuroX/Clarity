@@ -28,37 +28,24 @@ export class TaskCalculator {
 	}
 
 	/**
-	 * Compute completeness for a single task using the formula:
-	 * (sum(children durations where state is In Progress or Scheduled) + task duration) /
-	 * (sum(children durations where state != Overdue) + task duration)
+	 * Compute completeness for a single task and return a percentage 0..100 using the formula:
+	 * percent = ((sum(children durations where state is In Progress or Scheduled) + task duration) /
+	 * (sum(children durations where state != Overdue) + task duration)) * 100
 	 * Throws SchedulingError('OVERDUE_TASK') if any involved task is Overdue.
 	 */
 	async getTaskCompleteness(taskId: number): Promise<number> {
 		const task = await this.taskRepository.findById(taskId);
 		if (!task) throw new TaskCalculator.SchedulingError('NOT_FOUND', 'Task not found', { taskId });
 
-		// If the task itself is overdue and not completed, abort
-		if (task.state === 'Overdue')
-			throw new TaskCalculator.SchedulingError(
-				'OVERDUE_TASK',
-				`Task ${task.id} is overdue`,
-				{ taskId: task.id }
-			);
+		// Treat Overdue as an incomplete state (similar to In Progress).
+		// Do not abort when task or descendants are Overdue; include them in completeness.
 
 		// Fetch all descendants (children, grandchildren, ...). Use repository tree helper.
 		const descendants = (await this.taskRepository.findDescendants(task)).filter(
 			(t) => t.id !== task.id
 		);
 
-		// If any descendant is overdue and not completed, abort
-		for (const d of descendants) {
-			if (d.state === 'Overdue')
-				throw new TaskCalculator.SchedulingError(
-					'OVERDUE_TASK',
-					`Descendant task ${d.id} is overdue`,
-					{ descendantId: d.id }
-				);
-		}
+		// Do not abort on Overdue descendants; they are treated as incomplete.
 
 		// Validate durations (must be > 0 for tasks that participate)
 		const parentDur = task.estimateDurationHour;
@@ -83,16 +70,19 @@ export class TaskCalculator {
 					);
 				else continue; // completed descendant with no duration contributes 0
 			}
-			// denominator includes descendants in any state except Overdue
-			if (d.state !== 'Overdue') denomDescendantsDur += dur;
-			// numerator includes descendants In Progress or Scheduled
-			if (d.state === 'In Progress' || d.state === 'Scheduled') activeDescendantsDur += dur;
+			// denominator includes all descendants with durations (including Overdue)
+			denomDescendantsDur += dur;
+			// numerator includes descendants that are incomplete: In Progress, Scheduled, or Overdue
+			if (d.state === 'In Progress' || d.state === 'Scheduled' || d.state === 'Overdue')
+				activeDescendantsDur += dur;
 		}
 
 		const numerator = activeDescendantsDur + (parentDur || 0);
 		const denominator = denomDescendantsDur + (parentDur || 0);
 		if (denominator === 0) return 0;
-		return numerator / denominator;
+		const fraction = numerator / denominator;
+		const percent = Math.round(Math.max(0, Math.min(1, fraction)) * 100);
+		return percent;
 	}
 
 	/**
@@ -138,5 +128,38 @@ export class TaskCalculator {
 		const ratio = (windowMs - timeToStart) / windowMs; // 0..1 relative to start-by
 		const urgency = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
 		return urgency;
+	}
+
+	/**
+	 * Compare actual duration vs estimated duration for a task.
+	 * Returns an object with estimatedDurationHour, actualDurationHour, deltaHour, deltaPercent
+	 * If actual duration is not available, actualDurationHour will be null.
+	 */
+	async getActualVsEstimated(taskId: number): Promise<{
+		estimatedDurationHour: number | null;
+		actualDurationHour: number | null;
+		deltaHour: number | null;
+		deltaPercent: number | null;
+	}>
+	{
+		const task = await this.taskRepository.findById(taskId);
+		if (!task) throw new TaskCalculator.SchedulingError('NOT_FOUND', 'Task not found', { taskId });
+
+		const estimated = task.estimateDurationHour ?? null;
+		const actual = task.actualDurationHour ?? null;
+		if (actual === null) {
+			return { estimatedDurationHour: estimated, actualDurationHour: null, deltaHour: null, deltaPercent: null };
+		}
+		let deltaHour: number | null = null;
+		let deltaPercent: number | null = null;
+		if (estimated !== null) {
+			deltaHour = Math.round((actual - estimated) * 100) / 100;
+			if (estimated !== 0) {
+				deltaPercent = Math.round(((actual - estimated) / estimated) * 10000) / 100; // two decimals percent
+			} else {
+				deltaPercent = null;
+			}
+		}
+		return { estimatedDurationHour: estimated, actualDurationHour: actual, deltaHour, deltaPercent };
 	}
 }

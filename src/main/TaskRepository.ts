@@ -12,6 +12,10 @@ export interface CreateTaskData {
 	tagIds?: number[];
 	priority?: number;
 	estimateDurationHour?: number;
+	actualStartDate?: Date | null;
+	actualEndDate?: Date | null;
+	actualDurationHour?: number | null;
+	completeness?: number;
 	parentTaskId?: number;
 }
 
@@ -26,6 +30,10 @@ export interface UpdateTaskData {
 	tagIds?: number[];
 	priority?: number;
 	estimateDurationHour?: number | null;
+	actualStartDate?: Date | null;
+	actualEndDate?: Date | null;
+	actualDurationHour?: number | null;
+	completeness?: number | null;
 	parentTaskId?: number | null;
 }
 
@@ -151,14 +159,63 @@ export class TaskRepository {
 	}
 
 	/**
-	 * Return the tree-shaped descendants for a task (includes the task as root)
+	 * Set actual start date and mark In Progress (only sets actualStartDate if not already set)
 	 */
-	async findDescendantsTree(task: Task): Promise<Task | null> {
-		try {
-			const tree = await this.ormRepository.manager.getTreeRepository(Task).findDescendantsTree(task);
-			return tree ?? null;
-		} catch (e) {
-			return null;
-		}
+	async setActualStart(id: number, date: Date): Promise<Task | null> {
+		const task = await this.findById(id);
+		if (!task) return null;
+		const payload: DeepPartial<Task> = { state: 'In Progress' };
+		if (!task.actualStartDate) payload.actualStartDate = date;
+		this.ormRepository.merge(task, payload);
+		return this.ormRepository.save(task);
+	}
+
+	/**
+	 * Set completion state and optionally actual end/date/duration
+	 */
+	async setCompletion(
+		id: number,
+		completed: boolean,
+		state: TaskState,
+		actualEndDate?: Date | null,
+		actualDurationHour?: number | null
+	): Promise<Task | null> {
+		const task = await this.findById(id);
+		if (!task) return null;
+		const payload: DeepPartial<Task> = { completed, state };
+		if (actualEndDate !== undefined) payload.actualEndDate = actualEndDate;
+		if (actualDurationHour !== undefined) payload.actualDurationHour = actualDurationHour;
+		this.ormRepository.merge(task, payload);
+		return this.ormRepository.save(task);
+	}
+
+	/**
+	 * Persist completeness value for a task
+	 */
+	async setCompleteness(id: number, completeness: number): Promise<Task | null> {
+		const task = await this.findById(id);
+		if (!task) return null;
+		this.ormRepository.merge(task, { completeness });
+		return this.ormRepository.save(task);
+	}
+
+	/**
+	 * If a task is completed, mark it In Progress and not completed.
+	 * Returns updated task or null.
+	 */
+	async reopenIfCompleted(id: number): Promise<Task | null> {
+		const task = await this.findById(id);
+		if (!task) return null;
+		if (!task.completed) return task;
+		this.ormRepository.merge(task, { completed: false, state: 'In Progress' });
+		return this.ormRepository.save(task);
+	}
+
+	/**
+	 * Return parent id for a task if any
+	 */
+	async getParentId(id: number): Promise<number | null> {
+		const t = await this.findById(id);
+		return t?.parentTask?.id ?? null;
 	}
 }

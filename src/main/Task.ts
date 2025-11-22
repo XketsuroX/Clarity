@@ -19,10 +19,14 @@ export interface ITaskJSON {
 	description: string;
 	deadline: string | null; // ISO string
 	startDate: string | null; // ISO string
+	actualStartDate: string | null;
+	actualEndDate: string | null;
 	completed: boolean;
 	categoryId?: number | null;
 	priority: number;
 	estimateDurationHour: number | null;
+	completeness: number;
+	actualDurationHour?: number | null;
 	tags: Tag[];
 	childrenTaskIds: number[];
 	parentTaskId?: number | null;
@@ -45,6 +49,12 @@ export class Task {
 	@Column({ type: 'datetime', nullable: true })
 	startDate!: Date | null;
 
+	@Column({ type: 'datetime', nullable: true })
+	actualStartDate!: Date | null;
+
+	@Column({ type: 'datetime', nullable: true })
+	actualEndDate!: Date | null;
+
 	@Column({ type: 'boolean', default: false })
 	completed!: boolean;
 
@@ -62,6 +72,12 @@ export class Task {
 
 	@Column({ type: 'int', nullable: true })
 	estimateDurationHour!: number | null;
+
+	@Column({ type: 'int', default: 0 })
+	completeness!: number;
+
+	@Column({ type: 'float', nullable: true })
+	actualDurationHour!: number | null;
 
 	@ManyToMany(() => Tag, { cascade: true })
 	@JoinTable()
@@ -87,6 +103,10 @@ export class Task {
 			categoryId: this.category?.id ?? null,
 			priority: this.priority,
 			estimateDurationHour: this.estimateDurationHour,
+			completeness: this.completeness,
+			actualStartDate: this.actualStartDate?.toISOString() ?? null,
+			actualEndDate: this.actualEndDate?.toISOString() ?? null,
+			actualDurationHour: this.actualDurationHour ?? null,
 			tags: this.tags,
 			childrenTaskIds: this.childrenTasks?.map((task) => task.id) ?? [],
 			parentTaskId: this.parentTask?.id ?? null,
