@@ -159,6 +159,13 @@ export class TaskRepository {
 	}
 
 	/**
+	 * Return the ancestors (parent, grandparent, ...) for a task (includes the task itself)
+	 */
+	async findAncestors(task: Task): Promise<Task[]> {
+		return this.ormRepository.manager.getTreeRepository(Task).findAncestors(task);
+	}
+
+	/**
 	 * Set actual start date and mark In Progress (only sets actualStartDate if not already set)
 	 */
 	async setActualStart(id: number, date: Date): Promise<Task | null> {
@@ -209,13 +216,5 @@ export class TaskRepository {
 		if (!task.completed) return task;
 		this.ormRepository.merge(task, { completed: false, state: 'In Progress' });
 		return this.ormRepository.save(task);
-	}
-
-	/**
-	 * Return parent id for a task if any
-	 */
-	async getParentId(id: number): Promise<number | null> {
-		const t = await this.findById(id);
-		return t?.parentTask?.id ?? null;
 	}
 }

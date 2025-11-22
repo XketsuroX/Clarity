@@ -84,18 +84,17 @@ export class TaskDependencyManager {
 	}
 
 	/**
-	 * Get ancestor IDs (direct parent, grandparent, ...) for a task
+	 * Get all ancestor IDs (direct parent, grandparent, ...) for a task
+	 * Consistent naming with `getAllDescendants`.
 	 */
-	async getAncestorIds(taskId: number): Promise<number[]> {
-		const result: number[] = [];
-		let current = await this.taskRepository.findById(taskId);
-		if (!current) return result;
-		while (current.parentTask) {
-			const parent = await this.taskRepository.findById(current.parentTask.id);
-			if (!parent) break;
-			result.push(parent.id);
-			current = parent;
-		}
-		return result;
+	async getAllAncestors(taskId: number): Promise<number[]> {
+		const task = await this.taskRepository.findById(taskId);
+		if (!task) return [];
+		// Use the repository tree helper to get ancestors (includes the node itself)
+		const ancestors = await this.taskRepository.findAncestors(task);
+		// Exclude the task itself and return parent IDs ordered from closest parent -> root
+		return ancestors
+			.filter((a) => a.id !== taskId)
+			.map((a) => a.id);
 	}
 }

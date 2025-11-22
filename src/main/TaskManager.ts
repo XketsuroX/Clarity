@@ -96,7 +96,7 @@ export class TaskManager {
 		if (affected && (affected.childrenTasks || []).length > 0) idsToUpdate.add(affected.id);
 
 		// include ancestors
-		const ancestorIds = await this.dependencyManager.getAncestorIds(affectedTaskId);
+		const ancestorIds = await this.dependencyManager.getAllAncestors(affectedTaskId);
 		for (const a of ancestorIds) idsToUpdate.add(a);
 
 		for (const id of idsToUpdate) {
