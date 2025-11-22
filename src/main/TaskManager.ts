@@ -1,19 +1,16 @@
-import { Task, ITaskJSON } from './Task';
-import { Tag } from './Tag';
-import { ICategoryJSON } from './Category';
+import { ITaskJSON } from './Task';
 import { CategoryManager, categoryManager } from './CategoryManager';
-import { TaskRepository } from './TaskRepository';
+import { CreateTaskData, TaskRepository, UpdateTaskData } from './TaskRepository';
 import { TaskDependencyManager } from './TaskDependencyManager';
 import { TaskCalculator } from './TaskCalculator';
 import { ErrorHandler, Result } from './ErrorHandler';
 
 export class TaskManager {
-	private static instance: TaskManager;
-	private taskRepository: TaskRepository;
-	private categoryManager: CategoryManager;
-	private dependencyManager: TaskDependencyManager;
-	private calculator: TaskCalculator;
-	private errorHandler: ErrorHandler;
+	private readonly taskRepository: TaskRepository;
+	private readonly categoryManager: CategoryManager;
+	private readonly dependencyManager: TaskDependencyManager;
+	private readonly calculator: TaskCalculator;
+	private readonly errorHandler: ErrorHandler;
 
 	/**
 	 * Helper to wrap project-level calculator calls with error handling
@@ -32,7 +29,7 @@ export class TaskManager {
 		}
 	}
 
-	private constructor(injectedCategoryManager?: CategoryManager) {
+	constructor(injectedCategoryManager?: CategoryManager) {
 		this.taskRepository = new TaskRepository();
 		this.categoryManager = injectedCategoryManager ?? categoryManager;
 		this.dependencyManager = new TaskDependencyManager(this.taskRepository);
@@ -40,167 +37,80 @@ export class TaskManager {
 		this.errorHandler = new ErrorHandler();
 	}
 
-	static getInstance(): TaskManager {
-		if (!TaskManager.instance) {
-			TaskManager.instance = new TaskManager();
-		}
-		return TaskManager.instance;
-	}
-
 	async listTasks(): Promise<ITaskJSON[]> {
-		return await this.taskRepository.getAllTasks();
+		const tasks = await this.taskRepository.findAll();
+		return tasks.map((task) => task.toJSON());
 	}
 
-	getCategories(): ICategoryJSON[] {
-		return this.categoryManager.listCategories();
+	async addTask(data: CreateTaskData): Promise<ITaskJSON> {
+		const newTask = await this.taskRepository.create(data);
+		return newTask.toJSON();
 	}
 
-	async addTask(
-		id: string,
-		title: string,
-		description: string,
-		deadlineISO: string,
-		startDateISO: string,
-		categoryId: number | null = null,
-		priority: number = 0,
-		estimateDurationHour: number = 0,
-		isRoot: boolean = false,
-		tags: Tag[] = [],
-		childrenTaskIds: string[] = [],
-		parentTaskIds: string[] = []
-	): Promise<ITaskJSON> {
-		const deadline = new Date(deadlineISO);
-		const startDate = new Date(startDateISO);
-		const task = new Task(
-			id,
-			title,
-			description,
-			deadline,
-			startDate,
-			false,
-			categoryId,
-			priority,
-			estimateDurationHour,
-			isRoot,
-			tags,
-			childrenTaskIds,
-			parentTaskIds
-		);
-		// Persist the task and its declared relations atomically via repository
-		// helper. This will throw on missing parents/children so callers will
-		// receive an error and the whole operation will be aborted.
-		const saved = await this.taskRepository.addTaskWithRelations(task, parentTaskIds, childrenTaskIds);
-		return saved.toJSON();
+	async removeTask(id: number): Promise<boolean> {
+		return await this.taskRepository.delete(id);
 	}
 
-	async removeTask(id: string): Promise<boolean> {
-		// Use repository helper to remove task and clean up relations atomically.
-		return await this.taskRepository.removeTaskWithRelations(id);
-	}
-
-	async toggleComplete(id: string): Promise<ITaskJSON | null> {
-		const t = await this.taskRepository.getTaskById(id);
-		if (!t) return null;
-		t.completed = !t.completed;
-		this.taskRepository.updateTask(id, t);
-		return t.toJSON();
-	}
-
-	async getTask(id: string): Promise<ITaskJSON | null> {
-		return await this.taskRepository.getTaskByIdJSON(id);
-	}
-
-	async updateTask(id: string, updates: Partial<ITaskJSON>): Promise<ITaskJSON | null> {
-		const task = await this.taskRepository.getTaskById(id);
+	async toggleComplete(id: number): Promise<ITaskJSON | null> {
+		const task = await this.taskRepository.findById(id);
 		if (!task) return null;
+		const updatedTask = await this.taskRepository.update(id, {
+			completed: !task.completed,
+		});
+		return updatedTask?.toJSON() ?? null;
+	}
 
-		const handlers: Record<string, (value: any) => void> = {
-			title: (v) => (task.title = String(v)),
-			description: (v) => (task.description = String(v)),
-			deadline: (v) => (task.deadline = v instanceof Date ? v : new Date(String(v))),
-			startDate: (v) => (task.startDate = v instanceof Date ? v : new Date(String(v))),
-			completed: (v) => (task.completed = Boolean(v)),
-			categoryId: (v) => (task.categoryId = v === null ? null : Number(v)),
-			priority: (v) => (task.priority = Number(v)),
-			estimateDurationHour: (v) => (task.estimateDurationHour = Number(v)),
-			isRoot: (v) => (task.isRoot = Boolean(v)),
-			tags: (v) => {
-				if (Array.isArray(v)) task.tags = v as Tag[];
-			},
-			childrenTaskIds: (v) => {
-				if (Array.isArray(v)) task.childrenTaskIds = v as string[];
-			},
-			parentTaskIds: (v) => {
-				if (Array.isArray(v)) task.parentTaskIds = v as string[];
-			},
-		};
+	async getTask(id: number): Promise<ITaskJSON | null> {
+		const task = await this.taskRepository.findById(id);
+		return task?.toJSON() ?? null;
+	}
 
-		for (const key of Object.keys(updates)) {
-			const value = (updates as any)[key];
-			const handler = handlers[key];
-			if (handler) {
-				handler(value);
-			} else {
-				// optional: log unexpected keys
-				// console.warn(`updateTask: unknown field '${key}'`);
+	async updateTask(id: number, data: UpdateTaskData): Promise<ITaskJSON | null> {
+		if (data.parentTaskId !== undefined && data.parentTaskId !== null) {
+			const wouldCreateCycle = await this.dependencyManager.wouldCreateCycle(
+				id,
+				data.parentTaskId
+			);
+			if (wouldCreateCycle) {
+				throw new Error('This operation would create a dependency cycle.');
 			}
 		}
 
-		this.taskRepository.updateTask(id, task);
-		return task.toJSON();
-	}
-
-	async addParent(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
-		return await this.dependencyManager.addParent(parentTaskId, childTaskId);
-	}
-
-	async removeParent(parentTaskId: string, childTaskId: string): Promise<ITaskJSON | null> {
-		return await this.dependencyManager.removeParent(parentTaskId, childTaskId);
-	}
-
-	async getParentTasks(taskId: string): Promise<ITaskJSON[]> {
-		return await this.dependencyManager.getParentTasks(taskId);
-	}
-
-	async getSubTasks(parentTaskId: string): Promise<ITaskJSON[]> {
-		return await this.dependencyManager.getSubTasks(parentTaskId);
+		const updatedTask = await this.taskRepository.update(id, data);
+		return updatedTask?.toJSON() ?? null;
 	}
 
 	async getRootTasks(): Promise<ITaskJSON[]> {
 		return await this.dependencyManager.getRootTasks();
 	}
 
-	async getRootTasksForTask(taskId: string): Promise<ITaskJSON[]> {
-		return await this.dependencyManager.getRootTasksForTask(taskId);
-	}
-
-	async getAllDescendants(taskId: string): Promise<ITaskJSON[]> {
+	async getAllDescendants(taskId: number): Promise<ITaskJSON[]> {
 		return await this.dependencyManager.getAllDescendants(taskId);
 	}
 
-	async getEarliestDeadline(taskIds: string[]): Promise<Date | null> {
+	async getEarliestDeadline(taskIds: number[]): Promise<Date | null> {
 		return await this.calculator.getEarliestDeadline(taskIds);
 	}
 
-	async getLatestStartDate(taskIds: string[]): Promise<Date | null> {
+	async getLatestStartDate(taskIds: number[]): Promise<Date | null> {
 		return await this.calculator.getLatestStartDate(taskIds);
 	}
 
 	async getGroupTimespan(
-		taskIds: string[]
+		taskIds: number[]
 	): Promise<{ earliestDeadline: Date | null; latestStartDate: Date | null; taskCount: number }> {
 		return await this.calculator.getGroupTimespan(taskIds);
 	}
 
-	async getTotalEstimatedDuration(taskIds: string[]): Promise<number> {
+	async getTotalEstimatedDuration(taskIds: number[]): Promise<number> {
 		return await this.calculator.getTotalEstimatedDuration(taskIds);
 	}
 
-	async getAveragePriority(taskIds: string[]): Promise<number> {
+	async getAveragePriority(taskIds: number[]): Promise<number> {
 		return await this.calculator.getAveragePriority(taskIds);
 	}
 
-	async getCompletionRate(taskIds: string[]): Promise<number> {
+	async getCompletionRate(taskIds: number[]): Promise<number> {
 		return await this.calculator.getCompletionRate(taskIds);
 	}
 
@@ -213,13 +123,13 @@ export class TaskManager {
 		const now = new Date();
 
 		for (const taskJSON of allTasks) {
-			const task = await this.taskRepository.getTaskById(taskJSON.id);
+			const task = await this.taskRepository.findById(taskJSON.id);
 			if (!task) continue;
 
 			// Recalculate state based on current status
 			if (task.completed) {
 				// State stays 'Completed'
-			} else if (task.deadline.getTime() < now.getTime()) {
+			} else if (task.deadline && task.deadline.getTime() < now.getTime()) {
 				// Mark as overdue if deadline passed
 				task.toJSON(); // state will be 'Overdue'
 			} else {
@@ -230,31 +140,31 @@ export class TaskManager {
 		}
 	}
 
-	async getProjectTimespan(anyTaskId: string): Promise<
+	async getProjectTimespan(anyTaskId: number): Promise<
 		Result<{
 			earliestDeadline: Date | null;
 			latestStartDate: Date | null;
 			taskCount: number;
-			rootTaskIds: string[];
+			rootTaskIds: number[];
 		}>
 	> {
 		await this.refreshTaskStates();
 		return this.wrapProjectCalc(() => this.calculator.getProjectTimespan(anyTaskId));
 	}
 
-	async getProjectTotalEstimatedDuration(anyTaskId: string): Promise<Result<number>> {
+	async getProjectTotalEstimatedDuration(anyTaskId: number): Promise<Result<number>> {
 		await this.refreshTaskStates();
 		return this.wrapProjectCalc(() =>
 			this.calculator.getProjectTotalEstimatedDuration(anyTaskId)
 		);
 	}
 
-	async getProjectAveragePriority(anyTaskId: string): Promise<Result<number>> {
+	async getProjectAveragePriority(anyTaskId: number): Promise<Result<number>> {
 		await this.refreshTaskStates();
 		return this.wrapProjectCalc(() => this.calculator.getProjectAveragePriority(anyTaskId));
 	}
 
-	async getProjectCompletionRate(anyTaskId: string): Promise<Result<number>> {
+	async getProjectCompletionRate(anyTaskId: number): Promise<Result<number>> {
 		await this.refreshTaskStates();
 		return this.wrapProjectCalc(() => this.calculator.getProjectCompletionRate(anyTaskId));
 	}
@@ -263,10 +173,10 @@ export class TaskManager {
 	 * Get the critical path for a project (chain of tasks with zero slack)
 	 * Automatically refreshes task states before calculation
 	 */
-	async getProjectCriticalPath(anyTaskId: string): Promise<Result<string[]>> {
+	async getProjectCriticalPath(anyTaskId: number): Promise<Result<number[]>> {
 		await this.refreshTaskStates();
 		return this.wrapProjectCalc(() => this.calculator.getProjectCriticalPath(anyTaskId));
 	}
 }
 
-export const taskManager = TaskManager.getInstance();
+export const taskManager = new TaskManager();
