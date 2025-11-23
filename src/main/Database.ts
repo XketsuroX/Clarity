@@ -3,11 +3,12 @@ import { join } from 'path';
 import { app } from 'electron';
 import { Task } from './Task';
 import { Tag } from './Tag';
+import { Category } from './Category';
 
 export const AppDataSource = new DataSource({
 	type: 'sqlite',
 	database: join(app.getPath('userData'), 'app.db'),
-	entities: [Task, Tag],
+	entities: [Task, Tag, Category],
 	synchronize: true,
 	logging: false,
 	dropSchema: false,
