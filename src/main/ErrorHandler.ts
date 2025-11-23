@@ -1,27 +1,27 @@
 export type Result<T> =
 	| { ok: true; value: T }
-	| { ok: false; error: { code: string; message: string; details?: any } };
+	| { ok: false; error: { code: string; message: string; details?: unknown } };
 
 export class ErrorHandler {
-	formatError(err: unknown): { code: string; message: string; details?: any } {
+	formatError(err: unknown): { code: string; message: string; details?: unknown } {
 		if (!err) return { code: 'UNKNOWN', message: 'Unknown error' };
 
-		const anyErr: any = err as any;
-		// If error has code/message structured like SchedulingError
-		if (typeof anyErr === 'object' && anyErr !== null && 'code' in anyErr) {
-			return {
-				code: anyErr.code || 'ERROR',
-				message: anyErr.message || String(anyErr),
-				details: anyErr.details,
-			};
+		// If it's a plain Error instance
+		if (err instanceof Error) {
+			return { code: 'ERROR', message: err.message, details: { name: err.name } };
 		}
 
-		// For plain Error
-		if (anyErr instanceof Error) {
-			return { code: 'ERROR', message: anyErr.message, details: { name: anyErr.name } };
-		}
+		// Fallback - coerce to string
+		return { code: 'ERROR', message: String(err) };
+	}
 
-		// Fallback
-		return { code: 'ERROR', message: String(anyErr) };
+	async wrapAsync<T>(fn: () => Promise<T | null>, notFoundMsg = 'Not found'): Promise<Result<T>> {
+		try {
+			const v = await fn();
+			if (v === null) return { ok: false, error: { code: 'NOT_FOUND', message: notFoundMsg } };
+			return { ok: true, value: v };
+		} catch (err) {
+			return { ok: false, error: this.formatError(err) };
+		}
 	}
 }
