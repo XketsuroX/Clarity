@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
+import { unwrapResult } from './api';
 import 'element-plus/theme-chalk/dark/css-vars.css';
 
 interface Task {
@@ -38,7 +39,35 @@ function addTask(): void {
 		ElMessage.warning('任務內容不能為空！');
 		return;
 	}
-	// 3. 預設將新任務加入第一個分類
+
+	// Try to call main process API if available and unwrap Result<T>
+	// @ts-ignore
+	const api: any = typeof window !== 'undefined' ? (window as any).api : undefined;
+	if (api && typeof api.addTask === 'function') {
+		(async () => {
+			try {
+				// call main and unwrap Result<T>
+				const res = await api.addTask({ text: newTaskText.value });
+				const task = unwrapResult(res) as any;
+				// try to place task into local categories if returned
+				if (task) {
+					if (categories.value.length > 0) {
+						categories.value[0].tasks.push({
+							id: task.id ?? Date.now(),
+							text: task.text ?? newTaskText.value,
+							completed: !!task.completed,
+						});
+					}
+					newTaskText.value = '';
+				}
+			} catch (err) {
+				ElMessage.error(String(err));
+			}
+		})();
+		return;
+	}
+
+	// Fallback: local-only mock behavior
 	if (categories.value.length > 0) {
 		categories.value[0].tasks.push({
 			id: Date.now(),
@@ -49,10 +78,28 @@ function addTask(): void {
 	} else {
 		ElMessage.error('沒有可用的分類！');
 	}
-	newTaskText.value = '';
 }
 
 function removeTask(categoryId: number, taskId: number): void {
+	// Try main API first
+	// @ts-ignore
+	const api: any = typeof window !== 'undefined' ? (window as any).api : undefined;
+	if (api && typeof api.removeTask === 'function') {
+		(async () => {
+			try {
+				const res = await api.removeTask(taskId);
+				const ok = unwrapResult<boolean>(res);
+				if (ok) {
+					const category = categories.value.find((c) => c.id === categoryId);
+					if (category) category.tasks = category.tasks.filter((t) => t.id !== taskId);
+				}
+			} catch (err) {
+				ElMessage.error(String(err));
+			}
+		})();
+		return;
+	}
+
 	const category = categories.value.find((c) => c.id === categoryId);
 	if (category) {
 		category.tasks = category.tasks.filter((t) => t.id !== taskId);
