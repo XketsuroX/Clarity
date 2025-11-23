@@ -33,7 +33,7 @@ export interface UpdateTaskData {
 	actualStartDate?: Date | null;
 	actualEndDate?: Date | null;
 	actualDurationHour?: number | null;
-	completeness?: number | null;
+	completeness?: number;
 	parentTaskId?: number | null;
 }
 
