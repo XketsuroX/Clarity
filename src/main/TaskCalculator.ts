@@ -45,40 +45,92 @@ export class TaskCalculator {
 			(t) => t.id !== task.id
 		);
 
-		// Do not abort on Overdue descendants; they are treated as incomplete.
-
-		// Validate durations (must be > 0 for tasks that participate)
-		const parentDur = task.estimateDurationHour;
-		if ((!parentDur || parentDur <= 0) && !task.completed) {
-			throw new TaskCalculator.SchedulingError(
-				'MISSING_DURATION',
-				`Task ${task.id} has no estimated duration`,
-				{ taskId: task.id }
-			);
+		// Build a quick parent id set to determine leaf vs non-leaf among the descendants
+		const parentIdSet = new Set<number>();
+		for (const d of descendants) {
+			if (d.parentTask && typeof d.parentTask.id === 'number') parentIdSet.add(d.parentTask.id);
 		}
 
+		// Do not abort on Overdue descendants; they are treated as incomplete.
+
+		// Validate and compute durations taking into account completed tasks (prefer actualDurationHour)
 		let activeDescendantsDur = 0;
 		let denomDescendantsDur = 0;
+
 		for (const d of descendants) {
-			const dur = d.estimateDurationHour;
-			if (!dur || dur <= 0) {
-				if (!d.completed)
+			// Determine the canonical duration value for this task: prefer actual when completed
+			let durValue: number | null = null;
+			if (d.completed) {
+				if (typeof d.actualDurationHour === 'number' && d.actualDurationHour > 0) durValue = d.actualDurationHour;
+				else if (typeof d.estimateDurationHour === 'number' && d.estimateDurationHour > 0) durValue = d.estimateDurationHour;
+				else {
+					// completed descendant with no duration contributes 0 to both numerator/denominator
+					continue;
+				}
+			} else {
+				// not completed: must have an estimate
+				if (typeof d.estimateDurationHour !== 'number' || d.estimateDurationHour <= 0) {
 					throw new TaskCalculator.SchedulingError(
 						'MISSING_DURATION',
 						`Descendant task ${d.id} has no estimated duration`,
 						{ descendantId: d.id }
 					);
-				else continue; // completed descendant with no duration contributes 0
+				}
+				durValue = d.estimateDurationHour!;
 			}
-			// denominator includes all descendants with durations (including Overdue)
-			denomDescendantsDur += dur;
-			// numerator includes descendants that are incomplete: In Progress, Scheduled, or Overdue
-			if (d.state === 'In Progress' || d.state === 'Scheduled' || d.state === 'Overdue')
-				activeDescendantsDur += dur;
+
+			// Add to denominator (total effort)
+			denomDescendantsDur += durValue;
+
+			// Compute numerator contribution. If this descendant is a leaf, use completeness to reduce remaining
+			const isLeaf = !parentIdSet.has(d.id);
+			if (isLeaf) {
+				if (!d.completed) {
+					const completeness = typeof d.completeness === 'number' ? d.completeness : 0;
+					const remaining = durValue * (1 - Math.max(0, Math.min(100, completeness)) / 100);
+					if (d.state === 'In Progress' || d.state === 'Scheduled' || d.state === 'Overdue') activeDescendantsDur += remaining;
+				}
+				// completed leaf contributes 0 to numerator
+			} else {
+				// non-leaf: include full duration if task is active
+				if (d.state === 'In Progress' || d.state === 'Scheduled' || d.state === 'Overdue') activeDescendantsDur += durValue;
+			}
 		}
 
-		const numerator = activeDescendantsDur + (parentDur || 0);
-		const denominator = denomDescendantsDur + (parentDur || 0);
+		// Compute parent (task itself) duration contributions. Prefer actual when completed.
+		let parentDurValue: number | null = null;
+		if (task.completed) {
+			if (typeof task.actualDurationHour === 'number' && task.actualDurationHour > 0) parentDurValue = task.actualDurationHour;
+			else if (typeof task.estimateDurationHour === 'number' && task.estimateDurationHour > 0) parentDurValue = task.estimateDurationHour;
+			else parentDurValue = 0; // completed with no duration -> 0
+		} else {
+			if (typeof task.estimateDurationHour !== 'number' || task.estimateDurationHour <= 0) {
+				throw new TaskCalculator.SchedulingError(
+					'MISSING_DURATION',
+					`Task ${task.id} has no estimated duration`,
+					{ taskId: task.id }
+				);
+			}
+			parentDurValue = task.estimateDurationHour!;
+		}
+
+		// Denominator always includes the task's canonical duration
+		const denominator = denomDescendantsDur + (parentDurValue || 0);
+
+		// Numerator: if the task is a leaf, apply completeness to its remaining; otherwise include its full duration if active
+		let parentNumerator = 0;
+		const taskIsLeaf = !descendants.some((x) => x.parentTask && x.parentTask.id === task.id);
+		if (taskIsLeaf) {
+			if (!task.completed) {
+				const completeness = typeof task.completeness === 'number' ? task.completeness : 0;
+				parentNumerator = (parentDurValue || 0) * (1 - Math.max(0, Math.min(100, completeness)) / 100);
+			}
+			// completed leaf contributes 0
+		} else {
+			if (task.state === 'In Progress' || task.state === 'Scheduled' || task.state === 'Overdue') parentNumerator = (parentDurValue || 0);
+		}
+
+		const numerator = activeDescendantsDur + parentNumerator;
 		if (denominator === 0) return 0;
 		const fraction = numerator / denominator;
 		const percent = Math.round(Math.max(0, Math.min(1, fraction)) * 100);
@@ -161,5 +213,71 @@ export class TaskCalculator {
 			}
 		}
 		return { estimatedDurationHour: estimated, actualDurationHour: actual, deltaHour, deltaPercent };
+	}
+
+	/**
+	 * Estimate remaining duration (in hours) for a task by aggregating descendants and
+	 * using leaf completeness where available. Includes the task's own remaining duration
+	 * only when the task is `In Progress`.
+	 *
+	 * Aborts with SchedulingError('OVERDUE_TASK') if the root task is Overdue and not completed.
+	 * Aborts with SchedulingError('MISSING_DURATION') if a non-completed task lacks an estimate.
+	 */
+	async estimatedTaskDuration(taskId: number): Promise<number> {
+		const root = await this.taskRepository.findById(taskId);
+		if (!root) throw new TaskCalculator.SchedulingError('NOT_FOUND', 'Task not found', { taskId });
+
+		if (root.state === 'Overdue' && !root.completed)
+			throw new TaskCalculator.SchedulingError('OVERDUE_TASK', `Task ${root.id} is overdue`, { taskId: root.id });
+
+		// load full subtree (includes the root)
+		const all = await this.taskRepository.findDescendants(root);
+		// build maps
+		const taskMap = new Map<number, Task>();
+		const children = new Map<number, number[]>();
+		for (const t of all) {
+			taskMap.set(t.id, t);
+			children.set(t.id, []);
+		}
+		for (const t of all) {
+			if (t.parentTask && taskMap.has(t.parentTask.id)) {
+				children.get(t.parentTask.id)!.push(t.id);
+			}
+		}
+
+		const computeRemaining = (id: number): number => {
+			const t = taskMap.get(id)!;
+			if (t.completed) return 0;
+
+			// If a descendant (not root) is overdue, treat as incomplete (do not abort)
+			// Requirement: only abort when the calculated (root) task is overdue.
+
+			const childIds = children.get(id) || [];
+			let total = 0;
+			if (childIds.length === 0) {
+				// leaf
+				const est = t.estimateDurationHour;
+				if ((!est || est <= 0) && !t.completed)
+					throw new TaskCalculator.SchedulingError('MISSING_DURATION', `Task ${t.id} has no estimated duration`, { taskId: t.id });
+				const completeness = typeof t.completeness === 'number' ? t.completeness : 0;
+				return (est || 0) * (1 - completeness / 100);
+			} else {
+				// aggregate children
+				for (const c of childIds) {
+					total += computeRemaining(c);
+				}
+				// include this task's own remaining duration only if it's In Progress
+				if (t.state === 'In Progress') {
+					const est = t.estimateDurationHour;
+					if ((!est || est <= 0) && !t.completed)
+						throw new TaskCalculator.SchedulingError('MISSING_DURATION', `Task ${t.id} has no estimated duration`, { taskId: t.id });
+					const completeness = typeof t.completeness === 'number' ? t.completeness : 0;
+					total += (est || 0) * (1 - completeness / 100);
+				}
+				return total;
+			}
+		};
+
+		return computeRemaining(root.id);
 	}
 }

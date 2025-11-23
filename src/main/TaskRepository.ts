@@ -190,6 +190,8 @@ export class TaskRepository {
 		const task = await this.findById(id);
 		if (!task) return null;
 		const payload: DeepPartial<Task> = { completed, state };
+		// When marking completed, persist completeness as 100
+		if (completed) payload.completeness = 100;
 		if (actualEndDate !== undefined) payload.actualEndDate = actualEndDate;
 		if (actualDurationHour !== undefined) payload.actualDurationHour = actualDurationHour;
 		this.ormRepository.merge(task, payload);
