@@ -58,7 +58,11 @@ export class Task {
 	@Column({ type: 'boolean', default: false })
 	completed!: boolean;
 
-	@Column({ type: 'enum', enum: ['Completed', 'In Progress', 'Overdue', 'Scheduled'], default: 'Scheduled' })
+	@Column({
+		type: 'enum',
+		enum: ['Completed', 'In Progress', 'Overdue', 'Scheduled'],
+		default: 'Scheduled',
+	})
 	state!: TaskState;
 
 	@ManyToOne(() => Category, (category) => category.tasks, {

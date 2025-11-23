@@ -161,10 +161,16 @@ export class TaskManager {
 			const children = task.childrenTasks || [];
 			const incomplete = children.find((c) => !c.completed);
 			if (incomplete) {
-				throw new Error('All child tasks must be completed before marking this task as completed');
+				throw new Error(
+					'All child tasks must be completed before marking this task as completed'
+				);
 			}
 		}
-		const newState = newCompleted ? 'Completed' : (task.deadline && task.deadline.getTime() < Date.now() ? 'Overdue' : 'In Progress');
+		const newState = newCompleted
+			? 'Completed'
+			: task.deadline && task.deadline.getTime() < Date.now()
+				? 'Overdue'
+				: 'In Progress';
 
 		const now = new Date();
 		if (newCompleted) {
@@ -175,11 +181,23 @@ export class TaskManager {
 				const durMs = now.getTime() - new Date(start).getTime();
 				durHours = Math.round((durMs / (1000 * 60 * 60)) * 100) / 100; // two decimals
 			}
-			const updatedTask = await this.taskRepository.setCompletion(id, true, 'Completed', now, durHours);
+			const updatedTask = await this.taskRepository.setCompletion(
+				id,
+				true,
+				'Completed',
+				now,
+				durHours
+			);
 			await this.refreshCompleteness(id);
 			return updatedTask?.toJSON() ?? null;
 		} else {
-			const updatedTask = await this.taskRepository.setCompletion(id, false, newState, null, null);
+			const updatedTask = await this.taskRepository.setCompletion(
+				id,
+				false,
+				newState,
+				null,
+				null
+			);
 			await this.refreshCompleteness(id);
 			return updatedTask?.toJSON() ?? null;
 		}
@@ -249,6 +267,17 @@ export class TaskManager {
 			if (!root) return null;
 			return await this.calculator.getTaskCompleteness(root.id);
 		}, 'Project not found');
+	}
+
+	/**
+	 * Get estimated remaining duration (hours) for a task.
+	 * Refreshes overdue states first and returns a Result<number>.
+	 */
+	async getEstimatedTaskDuration(taskId: number): Promise<Result<number>> {
+		await this.refreshOverdue();
+		return this.wrapProjectCalc(async () => {
+			return await this.calculator.estimatedTaskDuration(taskId);
+		}, 'Task not found');
 	}
 
 	/**

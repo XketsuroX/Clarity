@@ -93,8 +93,6 @@ export class TaskDependencyManager {
 		// Use the repository tree helper to get ancestors (includes the node itself)
 		const ancestors = await this.taskRepository.findAncestors(task);
 		// Exclude the task itself and return parent IDs ordered from closest parent -> root
-		return ancestors
-			.filter((a) => a.id !== taskId)
-			.map((a) => a.id);
+		return ancestors.filter((a) => a.id !== taskId).map((a) => a.id);
 	}
 }
