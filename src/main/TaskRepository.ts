@@ -16,7 +16,7 @@ export interface CreateTaskData {
 	actualEndDate?: Date | null;
 	actualDurationHour?: number | null;
 	completeness?: number;
-	parentTaskId?: number;
+	parentTaskId?: number | null;
 }
 
 export interface UpdateTaskData {
