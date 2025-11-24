@@ -14,7 +14,7 @@ export class TaskCalculator {
 	static SchedulingError = class SchedulingError extends Error {
 		code: string;
 		details?: any;
-		constructor(code: string, message: string, details?: any) {
+		constructor(code: string, message: string, details?: unknown) {
 			super(message);
 			this.code = code;
 			this.details = details;
@@ -174,7 +174,7 @@ export class TaskCalculator {
 
 		// Require duration for non-completed tasks (stricter rule)
 		const durHours = task.estimateDurationHour;
-		if ((!durHours || durHours <= 0) && !task.completed) {
+		if (!durHours || durHours <= 0) {
 			throw new TaskCalculator.SchedulingError(
 				'MISSING_DURATION',
 				`Task ${task.id} has no estimated duration`,
@@ -290,7 +290,7 @@ export class TaskCalculator {
 			if (childIds.length === 0) {
 				// leaf
 				const est = t.estimateDurationHour;
-				if ((!est || est <= 0) && !t.completed)
+				if (!est || est <= 0)
 					throw new TaskCalculator.SchedulingError(
 						'MISSING_DURATION',
 						`Task ${t.id} has no estimated duration`,
@@ -306,7 +306,7 @@ export class TaskCalculator {
 				// include this task's own remaining duration only if it's In Progress
 				if (t.state === 'In Progress') {
 					const est = t.estimateDurationHour;
-					if ((!est || est <= 0) && !t.completed)
+					if (!est || est <= 0)
 						throw new TaskCalculator.SchedulingError(
 							'MISSING_DURATION',
 							`Task ${t.id} has no estimated duration`,

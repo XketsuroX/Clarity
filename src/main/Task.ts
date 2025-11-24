@@ -112,7 +112,7 @@ export class Task {
 			actualEndDate: this.actualEndDate?.toISOString() ?? null,
 			actualDurationHour: this.actualDurationHour ?? null,
 			tags: this.tags,
-			childrenTaskIds: this.childrenTasks?.map((task) => task.id) ?? [],
+			childrenTaskIds: this.childrenTasks.map((task) => task.id) ?? [],
 			parentTaskId: this.parentTask?.id ?? null,
 			state: this.state,
 		};

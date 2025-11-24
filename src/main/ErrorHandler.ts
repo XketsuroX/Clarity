@@ -18,7 +18,8 @@ export class ErrorHandler {
 	async wrapAsync<T>(fn: () => Promise<T | null>, notFoundMsg = 'Not found'): Promise<Result<T>> {
 		try {
 			const v = await fn();
-			if (v === null) return { ok: false, error: { code: 'NOT_FOUND', message: notFoundMsg } };
+			if (v === null)
+				return { ok: false, error: { code: 'NOT_FOUND', message: notFoundMsg } };
 			return { ok: true, value: v };
 		} catch (err) {
 			return { ok: false, error: this.formatError(err) };
