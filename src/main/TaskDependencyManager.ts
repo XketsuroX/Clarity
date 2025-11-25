@@ -96,3 +96,5 @@ export class TaskDependencyManager {
 		return ancestors.filter((a) => a.id !== taskId).map((a) => a.id);
 	}
 }
+
+export const taskDependencyManager = new TaskDependencyManager(new TaskRepository());

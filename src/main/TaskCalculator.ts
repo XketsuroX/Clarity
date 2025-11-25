@@ -322,3 +322,5 @@ export class TaskCalculator {
 		return computeRemaining(root.id);
 	}
 }
+
+export const taskCalculator = new TaskCalculator(new TaskRepository());

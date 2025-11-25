@@ -1,4 +1,4 @@
-import { ITaskJSON } from './Task';
+import { ITaskJSON, Task } from './Task';
 import { CategoryManager, categoryManager } from './CategoryManager';
 import { CreateTaskData, TaskRepository, UpdateTaskData } from './TaskRepository';
 import { TaskDependencyManager } from './TaskDependencyManager';
@@ -301,6 +301,10 @@ export class TaskManager {
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.calculator.getTaskUrgency(taskId, windowDays);
 		}, 'Task not found');
+	}
+
+	async getPendingTasks(): Promise<Task[]> {
+		return await this.taskRepository.getPendingTasks();
 	}
 }
 
