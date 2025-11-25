@@ -11,8 +11,6 @@ import {
 import { Tag } from './Tag';
 import { Category } from './Category';
 
-export type TaskState = 'Completed' | 'In Progress' | 'Overdue' | 'Scheduled';
-
 export interface ITaskJSON {
 	id: number;
 	title: string;
@@ -30,7 +28,7 @@ export interface ITaskJSON {
 	tags: Tag[];
 	childrenTaskIds: number[];
 	parentTaskId?: number | null;
-	state: TaskState;
+	state: string;
 	isSplittable: boolean;
 }
 @Entity()
@@ -59,12 +57,8 @@ export class Task {
 	@Column({ type: 'boolean', default: false })
 	completed!: boolean;
 
-	@Column({
-		type: 'enum',
-		enum: ['Completed', 'In Progress', 'Overdue', 'Scheduled'],
-		default: 'Scheduled',
-	})
-	state!: TaskState;
+	@Column({ type: 'varchar', default: 'Scheduled' })
+	state!: string;
 
 	@ManyToOne(() => Category, (category) => category.tasks, {
 		onDelete: 'SET NULL',

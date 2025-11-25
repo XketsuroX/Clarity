@@ -1,13 +1,13 @@
 import { DeepPartial, Repository } from 'typeorm';
 import { AppDataSource } from './Database';
-import { Task, TaskState } from './Task';
+import { Task } from './Task';
 
 export interface CreateTaskData {
 	title: string;
 	description?: string;
 	deadline?: Date;
 	startDate?: Date;
-	state?: TaskState;
+	state?: string;
 	categoryId?: number;
 	tagIds?: number[];
 	priority?: number;
@@ -24,7 +24,7 @@ export interface UpdateTaskData {
 	description?: string;
 	deadline?: Date | null;
 	startDate?: Date | null;
-	state?: TaskState;
+	state?: string;
 	completed?: boolean;
 	categoryId?: number | null;
 	tagIds?: number[];
@@ -72,8 +72,12 @@ export class TaskRepository {
 	 * Add a new task
 	 */
 	async create(data: CreateTaskData): Promise<Task> {
-		const { categoryId, tagIds, parentTaskId, ...taskData } = data;
+		const { categoryId, tagIds, parentTaskId, state, ...taskData } = data;
 		const taskToCreate: DeepPartial<Task> = { ...taskData };
+
+		if (state && !this.validateState(state)) {
+			throw new Error('Invalid task state');
+		}
 
 		if (categoryId) {
 			taskToCreate.category = { id: categoryId };
@@ -95,11 +99,15 @@ export class TaskRepository {
 	 * Update an existing task
 	 */
 	async update(id: number, data: UpdateTaskData): Promise<Task | null> {
-		const { categoryId, tagIds, parentTaskId, ...taskUpdates } = data;
+		const { categoryId, tagIds, parentTaskId, state, ...taskUpdates } = data;
 
 		const taskToUpdate = await this.findById(id);
 		if (!taskToUpdate) {
 			return null;
+		}
+
+		if (state && !this.validateState(state)) {
+			throw new Error('Invalid task state');
 		}
 
 		const payload: DeepPartial<Task> = { ...taskUpdates };
@@ -142,7 +150,7 @@ export class TaskRepository {
 		return this.ormRepository.count();
 	}
 
-	async getState(id: number): Promise<TaskState | null> {
+	async getState(id: number): Promise<string | null> {
 		const task = await this.findById(id);
 		return task ? task.state : null;
 	}
@@ -183,7 +191,7 @@ export class TaskRepository {
 	async setCompletion(
 		id: number,
 		completed: boolean,
-		state: TaskState,
+		state: string,
 		actualEndDate?: Date | null,
 		actualDurationHour?: number | null
 	): Promise<Task | null> {
@@ -223,5 +231,9 @@ export class TaskRepository {
 	async getPendingTasks(): Promise<Task[]> {
 		const allTasks = await this.findAll();
 		return allTasks.filter((task) => !task.completed);
+	}
+
+	private validateState(state: string): boolean {
+		return ['Scheduled', 'In Progress', 'Completed', 'Overdue'].includes(state);
 	}
 }
