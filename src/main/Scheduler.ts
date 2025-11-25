@@ -1,4 +1,5 @@
 import { Task } from './Task';
+import { taskCalculator } from './TaskCalculator';
 
 interface IKnapsackItem {
 	originalTask: Task;
@@ -13,18 +14,18 @@ export class Scheduler {
 	 * @param capacityHours 總工時 (e.g. 8)
 	 * @param timeUnit 最小時間單位 (e.g. 0.5 小時)
 	 */
-	public schedule(
+	public async schedule(
 		tasks: Task[],
 		capacityHours: number,
 		timeUnit: number = 0.5
-	): { taskId: number; title: string; scheduledDuration: number; isPartial: boolean }[] {
+	): Promise<{ taskId: number; title: string; scheduledDuration: number; isPartial: boolean }[]> {
 		// 1. 【關鍵步驟】物品轉換與拆分
 		const items: IKnapsackItem[] = [];
 
 		for (const task of tasks) {
 			const duration = task.estimateDurationHour || 1;
 			const totalUnits = Math.ceil(duration / timeUnit);
-			const totalValue = this.calculateTaskValue(task);
+			const totalValue = await this.calculateTaskValue(task);
 
 			if (task.isSplittable) {
 				// 【邏輯】如果是可拆分的，把它切成 totalUnits 個小物品
@@ -81,9 +82,13 @@ export class Scheduler {
 		return this.formatOutput(selectedItems, timeUnit);
 	}
 
-	private calculateTaskValue(task: Task): number {
+	private async calculateTaskValue(task: Task): Promise<number> {
 		// 您的評分邏輯 (Priority, Deadline...)
-		return task.priority * 100 + (task.deadline ? 50 : 0);
+		return (
+			(await taskCalculator.getTaskUrgency(task.id)) +
+			10 * task.priority +
+			(1 / task.estimateDurationHour) * 10
+		);
 	}
 
 	private formatOutput(

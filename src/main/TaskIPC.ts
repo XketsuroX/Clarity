@@ -53,4 +53,14 @@ export function registerTaskIpcHandlers(): void {
 	ipcMain.handle('tasks:refreshOverdue', async () => {
 		return await taskManager.refreshOverdue();
 	});
+
+	// 取得單一任務的預估與實際工時差值
+	ipcMain.handle('tasks:getActualVsEstimated', async (_, taskId: number) => {
+		return await taskCalculator.getActualVsEstimated(taskId);
+	});
+
+	// 計算所有任務的平均預估與實際工時差值
+	ipcMain.handle('tasks:getAverageActualVsEstimated', async () => {
+		return await taskCalculator.getAverageActualVsEstimated();
+	});
 }

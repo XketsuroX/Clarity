@@ -245,6 +245,40 @@ export class TaskCalculator {
 		};
 	}
 
+	async getAverageActualVsEstimated(): Promise<{
+		avgDeltaHour: number | null;
+		avgDeltaPercent: number | null;
+		count: number;
+	}> {
+		const tasks = await this.taskRepository.findAll();
+		let sumDeltaHour = 0;
+		let sumDeltaPercent = 0;
+		let count = 0;
+
+		for (const task of tasks) {
+			const result = await this.getActualVsEstimated(task.id);
+			if (
+				result.actualDurationHour !== null &&
+				result.estimatedDurationHour !== null &&
+				result.estimatedDurationHour !== 0
+			) {
+				sumDeltaHour += result.deltaHour ?? 0;
+				sumDeltaPercent += result.deltaPercent ?? 0;
+				count++;
+			}
+		}
+
+		if (count === 0) {
+			return { avgDeltaHour: null, avgDeltaPercent: null, count: 0 };
+		}
+
+		return {
+			avgDeltaHour: Math.round((sumDeltaHour / count) * 100) / 100,
+			avgDeltaPercent: Math.round((sumDeltaPercent / count) * 100) / 100,
+			count,
+		};
+	}
+
 	/**
 	 * Estimate remaining duration (in hours) for a task by aggregating descendants and
 	 * using leaf completeness where available. Includes the task's own remaining duration
