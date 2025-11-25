@@ -1,225 +1,374 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { ElMessage } from 'element-plus';
-import { unwrapResult } from './api';
-import 'element-plus/theme-chalk/dark/css-vars.css';
+import {
+	fetchTasks,
+	createTask,
+	toggleTaskComplete,
+	generateSchedule,
+	type Task,
+	type Tag,
+} from './api';
 
-interface Task {
-	id: number;
-	text: string;
-	completed: boolean;
-}
+// --- State Management ---
+const tasks = ref<Task[]>([]);
+const loading = ref(false);
+const showCreateModal = ref(false);
+const showScheduleModal = ref(false);
 
-interface Category {
-	id: number;
-	name: string;
-	tasks: Task[];
-}
+// Form Data
+const newTask = ref({
+	title: '',
+	estimateDurationHour: 1,
+	priority: 0,
+});
 
-const categories = ref<Category[]>([
-	{
-		id: 1,
-		name: '個人事務',
-		tasks: [
-			{ id: 1, text: '學習 Vue 資料結構', completed: true },
-			{ id: 2, text: '休息一下', completed: false },
-		],
-	},
-	{
-		id: 2,
-		name: '工作項目',
-		tasks: [{ id: 3, text: '規劃後端連接', completed: false }],
-	},
-]);
+const scheduleConfig = ref({
+	hours: 4,
+});
+const scheduleResult = ref<any[]>([]);
 
-const newTaskText = ref('');
+// --- Actions ---
 
-function addTask(): void {
-	if (newTaskText.value.trim() === '') {
-		ElMessage.warning('任務內容不能為空！');
-		return;
+// Load Tasks
+const loadTasks = async () => {
+	loading.value = true;
+	try {
+		tasks.value = await fetchTasks();
+	} catch (err) {
+		ElMessage.error(`Failed to load tasks: ${err}`);
+	} finally {
+		loading.value = false;
 	}
+};
 
-	// Try to call main process API if available and unwrap Result<T>
-	// @ts-ignore
-	const api: any = typeof window !== 'undefined' ? (window as any).api : undefined;
-	if (api && typeof api.addTask === 'function') {
-		(async () => {
-			try {
-				// call main and unwrap Result<T>
-				const res = await api.addTask({ text: newTaskText.value });
-				const task = unwrapResult(res) as any;
-				// try to place task into local categories if returned
-				if (task) {
-					if (categories.value.length > 0) {
-						categories.value[0].tasks.push({
-							id: task.id ?? Date.now(),
-							text: task.text ?? newTaskText.value,
-							completed: !!task.completed,
-						});
-					}
-					newTaskText.value = '';
-				}
-			} catch (err) {
-				ElMessage.error(String(err));
-			}
-		})();
-		return;
+// Create Task
+const handleCreate = async () => {
+	if (!newTask.value.title) return;
+	try {
+		await createTask(newTask.value);
+		ElMessage.success('Task created successfully');
+		showCreateModal.value = false;
+		newTask.value.title = ''; // Reset
+		await loadTasks();
+	} catch (err) {
+		ElMessage.error('Failed to create task: ' + err);
+		console.error(err);
 	}
+};
 
-	// Fallback: local-only mock behavior
-	if (categories.value.length > 0) {
-		categories.value[0].tasks.push({
-			id: Date.now(),
-			text: newTaskText.value,
-			completed: false,
-		});
-		newTaskText.value = '';
-	} else {
-		ElMessage.error('沒有可用的分類！');
+// Toggle Complete
+const handleToggleComplete = async (row: Task) => {
+	try {
+		await toggleTaskComplete(row.id, row.completed);
+		ElMessage.success(row.completed ? 'Task completed' : 'Task reopened');
+	} catch (err) {
+		row.completed = !row.completed; // Revert on error
+		ElMessage.error('Update failed');
 	}
-}
+};
 
-function removeTask(categoryId: number, taskId: number): void {
-	// Try main API first
-	// @ts-ignore
-	const api: any = typeof window !== 'undefined' ? (window as any).api : undefined;
-	if (api && typeof api.removeTask === 'function') {
-		(async () => {
-			try {
-				const res = await api.removeTask(taskId);
-				const ok = unwrapResult<boolean>(res);
-				if (ok) {
-					const category = categories.value.find((c) => c.id === categoryId);
-					if (category) category.tasks = category.tasks.filter((t) => t.id !== taskId);
-				}
-			} catch (err) {
-				ElMessage.error(String(err));
-			}
-		})();
-		return;
+// Run Auto-Schedule
+const runSchedule = async () => {
+	try {
+		scheduleResult.value = await generateSchedule(scheduleConfig.value.hours);
+		ElMessage.success(`Found ${scheduleResult.value.length} tasks for you!`);
+	} catch (err) {
+		ElMessage.error('Scheduling failed');
 	}
+};
 
-	const category = categories.value.find((c) => c.id === categoryId);
-	if (category) {
-		category.tasks = category.tasks.filter((t) => t.id !== taskId);
-	}
-}
+// Formatting Helper
+const formatDuration = (hours: number | null) => {
+	return hours ? `${hours}h` : '-';
+};
+
+onMounted(() => {
+	loadTasks();
+});
 </script>
 
 <template>
-	<div class="main-container">
-		<el-card class="box-card" shadow="always">
-			<!-- Title -->
-			<!-- Add Task Input -->
-			<template #header>
-				<div class="card-header">
-					<span>To-Do List</span>
-					<el-input
-						v-model="newTaskText"
-						placeholder="Add a new task..."
-						clearable
-						class="input-with-button"
-						@keyup.enter="addTask"
-					>
-						<template #append>
-							<el-button type="primary" @click="addTask">Add</el-button>
-						</template>
-					</el-input>
-				</div>
-			</template>
+	<div class="app-layout">
+		<header class="app-header">
+			<div class="brand">
+				<h1>CLARITY</h1>
+				<span class="subtitle">Task Intelligence</span>
+			</div>
+			<div class="controls">
+				<el-button circle size="large" @click="loadTasks"> 🔄 </el-button>
+				<el-button type="success" circle size="large" @click="showScheduleModal = true">
+					⚡
+				</el-button>
+				<el-button type="primary" circle size="large" @click="showCreateModal = true">
+					➕
+				</el-button>
+			</div>
+		</header>
 
-			<template #default>
-				<!-- 2. 更新模板渲染，使用巢狀 v-for -->
-				<div v-for="category in categories" :key="category.id" class="category-section">
-					<h3 class="category-title">{{ category.name }}</h3>
-					<div v-for="task in category.tasks" :key="task.id" class="task-item">
-						<el-checkbox v-model="task.completed" :label="task.text" size="large" />
-						<el-button
-							type="danger"
-							plain
-							circle
-							@click="removeTask(category.id, task.id)"
-							>X</el-button
-						>
+		<main class="app-content">
+			<el-card class="task-card" shadow="never">
+				<template #header>
+					<div class="card-header">
+						<span>My Tasks</span>
+						<el-tag type="info" effect="dark">{{ tasks.length }} items</el-tag>
+					</div>
+				</template>
+
+				<el-table
+					:data="tasks"
+					row-key="id"
+					default-expand-all
+					style="width: 100%; background-color: transparent"
+					:header-cell-style="{ background: '#1d1e1f', color: '#a0a0a0' }"
+					v-loading="loading"
+				>
+					<el-table-column width="50">
+						<template #default="{ row }">
+							<el-checkbox
+								v-model="row.completed"
+								@change="handleToggleComplete(row)"
+							/>
+						</template>
+					</el-table-column>
+
+					<el-table-column label="Task" min-width="300">
+						<template #default="{ row }">
+							<span
+								:class="{
+									'text-completed': row.completed,
+									'text-overdue': row.state === 'Overdue',
+								}"
+							>
+								{{ row.title }}
+							</span>
+							<small
+								v-if="row.state === 'Overdue'"
+								style="color: #f56c6c; display: block; font-size: 0.8em"
+							>
+								⚠️ Overdue
+							</small>
+						</template>
+					</el-table-column>
+
+					<el-table-column label="Status" width="120" align="center">
+						<template #default="{ row }">
+							<el-tag v-if="row.completed" type="success" effect="dark" size="small"
+								>Done</el-tag
+							>
+							<el-tag
+								v-else-if="row.state === 'Overdue'"
+								type="danger"
+								effect="dark"
+								size="small"
+								>Overdue</el-tag
+							>
+							<el-tag
+								v-else-if="row.state === 'In Progress'"
+								type="warning"
+								effect="dark"
+								size="small"
+								>Active</el-tag
+							>
+							<el-tag v-else type="info" effect="plain" size="small">Todo</el-tag>
+						</template>
+					</el-table-column>
+
+					<el-table-column label="Est." width="80" align="right">
+						<template #default="{ row }">
+							<span class="mono-text">{{
+								formatDuration(row.estimateDurationHour)
+							}}</span>
+						</template>
+					</el-table-column>
+				</el-table>
+			</el-card>
+		</main>
+
+		<el-dialog v-model="showCreateModal" title="New Task" width="400px" align-center>
+			<el-form :model="newTask" label-position="top">
+				<el-form-item label="What needs to be done?">
+					<el-input
+						v-model="newTask.title"
+						placeholder="e.g. Finish report"
+						size="large"
+					/>
+				</el-form-item>
+				<el-form-item label="Estimated Hours">
+					<el-input-number
+						v-model="newTask.estimateDurationHour"
+						:min="0.5"
+						:step="0.5"
+						style="width: 100%"
+					/>
+				</el-form-item>
+				<el-form-item label="Priority">
+					<el-rate
+						v-model="newTask.priority"
+						:max="3"
+						:colors="['#99A9BF', '#F7BA2A', '#FF9900']"
+					/>
+				</el-form-item>
+			</el-form>
+			<template #footer>
+				<el-button @click="showCreateModal = false">Cancel</el-button>
+				<el-button type="primary" @click="handleCreate">Create Task</el-button>
+			</template>
+		</el-dialog>
+
+		<el-dialog v-model="showScheduleModal" title="Auto-Schedule" width="500px" align-center>
+			<div class="schedule-box">
+				<p>How much free time do you have now?</p>
+				<div class="input-row">
+					<el-input-number
+						v-model="scheduleConfig.hours"
+						:min="0.5"
+						:step="0.5"
+						size="large"
+					/>
+					<el-button type="success" size="large" @click="runSchedule">Generate</el-button>
+				</div>
+			</div>
+
+			<div v-if="scheduleResult.length > 0" class="schedule-list">
+				<h4>Recommended Plan</h4>
+				<div v-for="(item, idx) in scheduleResult" :key="idx" class="schedule-item">
+					<div class="time-badge">{{ item.scheduledDuration }}h</div>
+					<div class="task-info">
+						<div class="task-title">{{ item.title }}</div>
+						<div v-if="item.isPartial" class="task-note">
+							🔸 Partial work recommended
+						</div>
 					</div>
 				</div>
-			</template>
-		</el-card>
+			</div>
+		</el-dialog>
 	</div>
 </template>
 
+<style>
+/* Global Dark Mode Overrides */
+:root {
+	--bg-color: #141414;
+	--card-bg: #1d1e1f;
+	--text-primary: #e5eaf3;
+	--text-secondary: #a3a6ad;
+	--accent-color: #409eff;
+}
+
+body {
+	background-color: var(--bg-color);
+	color: var(--text-primary);
+	margin: 0;
+	font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+}
+</style>
+
 <style scoped>
-.main-container {
-	width: 100%;
-	margin: auto;
-	margin-top: 5%;
-	padding: 0px;
+.app-layout {
+	max-width: 900px;
+	margin: 0 auto;
+	padding: 40px 20px;
 }
-.box-card {
-	transition:
-		all 0.3s ease-in-out,
-		background-color 0.3s;
-	background-color: var(--el-bg-color-overlay);
-	/* border: 1px solid var(--el-border-color); */
-	border: none;
-	border-radius: 20px;
-	width: 100%;
-}
-.box-card:hover {
-	transform: translateY(-5px);
-}
-.card-header {
-	display: flex;
-	flex-wrap: nowrap;
-	align-items: center;
-	gap: 15px;
-}
-.card-header span {
-	color: var(--el-text-color-primary);
-	white-space: nowrap;
-	flex-shrink: 0;
-}
-.input-with-button {
-	width: 100%;
-}
-.category-section {
-	margin-bottom: 20px;
-}
-.category-title {
-	color: var(--el-text-color-primary);
-	font-size: 1.1rem;
-	margin-bottom: 10px;
-	padding-left: 5px;
-	border-left: 3px solid var(--el-color-primary);
-}
-.task-item {
+
+/* Header Styling */
+.app-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 10px 0;
-	border-bottom: 1px solid var(--el-border-color-lighter);
-}
-.task-item:last-child {
-	border-bottom: none;
+	margin-bottom: 30px;
 }
 
-/* :deep(.el-card__header) {
-	border-bottom: none;
-	padding-bottom: 10px;
- } */
-
-/* :deep(.el-card__body) {
-	padding-top: 0px;
-} */
-
-:deep(.el-checkbox__label) {
-	transition: color 0.2s;
-	color: var(--el-text-color-primary);
-	font-size: 1rem;
+.brand h1 {
+	margin: 0;
+	font-size: 2rem;
+	font-weight: 900;
+	letter-spacing: 2px;
+	background: linear-gradient(45deg, #409eff, #36d1dc);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
 }
-:deep(.is-checked .el-checkbox__label) {
+
+.subtitle {
+	color: var(--text-secondary);
+	font-size: 0.9rem;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+}
+
+/* Material Card Styling */
+.task-card {
+	border: none;
+	background-color: var(--card-bg);
+	border-radius: 12px;
+}
+
+.card-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-weight: 600;
+}
+
+/* Typography Helpers */
+.text-completed {
 	text-decoration: line-through;
-	color: var(--el-text-color-secondary);
+	color: var(--text-secondary);
+}
+
+.text-overdue {
+	color: #f56c6c;
+	font-weight: bold;
+}
+
+.mono-text {
+	font-family: 'Consolas', monospace;
+	color: var(--text-secondary);
+}
+
+/* Schedule Modal Styles */
+.schedule-box {
+	background: #2b2b2b;
+	padding: 20px;
+	border-radius: 8px;
+	margin-bottom: 20px;
+	text-align: center;
+}
+
+.input-row {
+	display: flex;
+	justify-content: center;
+	gap: 10px;
+	margin-top: 10px;
+}
+
+.schedule-item {
+	display: flex;
+	align-items: center;
+	background: #2b2b2b;
+	margin-bottom: 8px;
+	padding: 10px;
+	border-radius: 6px;
+	border-left: 4px solid #67c23a; /* Green accent */
+}
+
+.time-badge {
+	background: #67c23a;
+	color: black;
+	font-weight: bold;
+	padding: 4px 8px;
+	border-radius: 4px;
+	margin-right: 12px;
+	min-width: 50px;
+	text-align: center;
+}
+
+.task-title {
+	font-weight: 500;
+}
+
+.task-note {
+	font-size: 0.8rem;
+	color: #e6a23c;
 }
 </style>
