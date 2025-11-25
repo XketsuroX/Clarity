@@ -10,6 +10,8 @@ import {
 	type Tag,
 } from './api';
 
+import { TaskAddParams } from '../../shared/TaskTypes';
+
 // --- State Management ---
 const tasks = ref<Task[]>([]);
 const loading = ref(false);
@@ -17,7 +19,7 @@ const showCreateModal = ref(false);
 const showScheduleModal = ref(false);
 
 // Form Data
-const newTask = ref({
+const newTask = ref<TaskAddParams>({
 	title: '',
 	estimateDurationHour: 1,
 	priority: 0,
@@ -46,7 +48,8 @@ const loadTasks = async () => {
 const handleCreate = async () => {
 	if (!newTask.value.title) return;
 	try {
-		await createTask(newTask.value);
+		console.log('Creating task:' + JSON.stringify(newTask.value) + typeof newTask.value);
+		await createTask(newTask.value as TaskAddParams);
 		ElMessage.success('Task created successfully');
 		showCreateModal.value = false;
 		newTask.value.title = ''; // Reset
@@ -83,8 +86,21 @@ const formatDuration = (hours: number | null) => {
 	return hours ? `${hours}h` : '-';
 };
 
+
+
 onMounted(() => {
 	loadTasks();
+	const task: Task = {
+		id: 1,
+		title: 'Test Task',
+		estimateDurationHour: 2,
+		priority: 1,
+		completed: false,
+		createdAt: new Date(),
+		updatedAt: new Date(),
+		state: 'In Progress',
+	};
+	handleToggleComplete(task);
 });
 </script>
 
