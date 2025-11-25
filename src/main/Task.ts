@@ -24,13 +24,14 @@ export interface ITaskJSON {
 	completed: boolean;
 	categoryId?: number | null;
 	priority: number;
-	estimateDurationHour: number | null;
+	estimateDurationHour: number;
 	completeness: number;
 	actualDurationHour?: number | null;
 	tags: Tag[];
 	childrenTaskIds: number[];
 	parentTaskId?: number | null;
 	state: TaskState;
+	isSplittable: boolean;
 }
 @Entity()
 export class Task {
@@ -74,8 +75,8 @@ export class Task {
 	@Column({ type: 'int', default: 0 })
 	priority!: number;
 
-	@Column({ type: 'int', nullable: true })
-	estimateDurationHour!: number | null;
+	@Column({ type: 'float' })
+	estimateDurationHour!: number;
 
 	@Column({ type: 'int', default: 0 })
 	completeness!: number;
@@ -92,6 +93,9 @@ export class Task {
 
 	@TreeParent()
 	parentTask!: Task | null;
+
+	@Column({ type: 'boolean', default: false })
+	isSplittable!: boolean;
 
 	// `state` is persisted on the entity. Time-based transitions (e.g. Overdue)
 	// are applied by TaskManager.refreshOverdue().
@@ -115,6 +119,7 @@ export class Task {
 			childrenTaskIds: this.childrenTasks.map((task) => task.id) ?? [],
 			parentTaskId: this.parentTask?.id ?? null,
 			state: this.state,
+			isSplittable: this.isSplittable,
 		};
 	}
 }

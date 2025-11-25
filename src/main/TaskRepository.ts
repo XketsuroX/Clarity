@@ -29,7 +29,7 @@ export interface UpdateTaskData {
 	categoryId?: number | null;
 	tagIds?: number[];
 	priority?: number;
-	estimateDurationHour?: number | null;
+	estimateDurationHour?: number;
 	actualStartDate?: Date | null;
 	actualEndDate?: Date | null;
 	actualDurationHour?: number | null;
@@ -218,5 +218,10 @@ export class TaskRepository {
 		if (!task.completed) return task;
 		this.ormRepository.merge(task, { completed: false, state: 'In Progress' });
 		return this.ormRepository.save(task);
+	}
+
+	async getPendingTasks(): Promise<Task[]> {
+		const allTasks = await this.findAll();
+		return allTasks.filter((task) => !task.completed);
 	}
 }
