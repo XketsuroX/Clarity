@@ -2,6 +2,8 @@ import { ipcMain } from 'electron';
 import { taskManager } from './TaskManager';
 import { taskDependencyManager } from './TaskDependencyManager';
 import { taskCalculator } from './TaskCalculator';
+import { TaskAddParams, TaskUpdateParams, TaskIdParam } from '../shared/TaskTypes';
+import { CreateTaskData } from './TaskRepository';
 
 export function registerTaskIpcHandlers(): void {
 	// 獲取所有任務
@@ -10,43 +12,51 @@ export function registerTaskIpcHandlers(): void {
 	});
 
 	// 獲取單個任務
-	ipcMain.handle('tasks:get', async (_, taskId: number) => {
-		return await taskManager.getTask(taskId);
+	ipcMain.handle('tasks:get', async (_, params: TaskIdParam) => {
+		return await taskManager.getTask(params.taskId);
 	});
 
 	// 創建任務
-	ipcMain.handle('tasks:add', async (_, taskData) => {
-		return await taskManager.addTask(taskData);
+	ipcMain.handle('tasks:add', async (_, params: TaskAddParams) => {
+		const createData: CreateTaskData = {
+			...params,
+			deadline: params.deadline ? new Date(params.deadline) : undefined,
+		};
+		return await taskManager.addTask(createData);
 	});
 
 	// 更新任務
-	ipcMain.handle('tasks:update', async (_, taskId: number, taskData) => {
-		return await taskManager.updateTask(taskId, taskData);
+	ipcMain.handle('tasks:update', async (_, params: TaskIdParam & { data: TaskUpdateParams }) => {
+		const updateData = {
+			...params.data,
+			deadline: params.data.deadline ? new Date(params.data.deadline) : undefined,
+		};
+		return await taskManager.updateTask(params.taskId, updateData);
 	});
 
 	// 刪除任務
-	ipcMain.handle('tasks:remove', async (_, taskId: number) => {
-		return await taskManager.removeTask(taskId);
+	ipcMain.handle('tasks:remove', async (_, params: TaskIdParam) => {
+		return await taskManager.removeTask(params.taskId);
 	});
 
 	// 獲取任務的所有後代
-	ipcMain.handle('tasks:getAllDescendants', async (_, taskId: number) => {
-		return await taskDependencyManager.getAllDescendants(taskId);
+	ipcMain.handle('tasks:getAllDescendants', async (_, params: TaskIdParam) => {
+		return await taskDependencyManager.getAllDescendants(params.taskId);
 	});
 
 	// 獲取任務的所有祖先
-	ipcMain.handle('tasks:getAllAncestors', async (_, taskId: number) => {
-		return await taskDependencyManager.getAllAncestors(taskId);
+	ipcMain.handle('tasks:getAllAncestors', async (_, params: TaskIdParam) => {
+		return await taskDependencyManager.getAllAncestors(params.taskId);
 	});
 
 	// 計算任務的完成度
-	ipcMain.handle('tasks:getCompleteness', async (_, taskId: number) => {
-		return await taskCalculator.getTaskCompleteness(taskId);
+	ipcMain.handle('tasks:getCompleteness', async (_, params: TaskIdParam) => {
+		return await taskCalculator.getTaskCompleteness(params.taskId);
 	});
 
 	// 計算任務的緊急性
-	ipcMain.handle('tasks:getUrgency', async (_, taskId: number) => {
-		return await taskCalculator.getTaskUrgency(taskId);
+	ipcMain.handle('tasks:getUrgency', async (_, params: TaskIdParam) => {
+		return await taskCalculator.getTaskUrgency(params.taskId);
 	});
 
 	// 刷新過期任務
@@ -55,8 +65,8 @@ export function registerTaskIpcHandlers(): void {
 	});
 
 	// 取得單一任務的預估與實際工時差值
-	ipcMain.handle('tasks:getActualVsEstimated', async (_, taskId: number) => {
-		return await taskCalculator.getActualVsEstimated(taskId);
+	ipcMain.handle('tasks:getActualVsEstimated', async (_, params: TaskIdParam) => {
+		return await taskCalculator.getActualVsEstimated(params.taskId);
 	});
 
 	// 計算所有任務的平均預估與實際工時差值
