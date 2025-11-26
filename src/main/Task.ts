@@ -109,8 +109,10 @@ export class Task {
 			actualStartDate: this.actualStartDate?.toISOString() ?? null,
 			actualEndDate: this.actualEndDate?.toISOString() ?? null,
 			actualDurationHour: this.actualDurationHour ?? null,
-			tags: this.tags,
-			childrenTaskIds: this.childrenTasks.map((task) => task.id) ?? [],
+			tags: Array.isArray(this.tags) ? this.tags : [],
+			childrenTaskIds: Array.isArray(this.childrenTasks)
+				? this.childrenTasks.map((task) => task.id)
+				: [],
 			parentTaskId: this.parentTask?.id ?? null,
 			state: this.state,
 			isSplittable: this.isSplittable,
