@@ -19,20 +19,22 @@ export interface TaskAddParams {
 	title: string;
 	description?: string;
 	deadline?: string;
-	estimateDurationHour?: number;
+	estimateDurationHour: number;
 	priority?: number;
 	categoryId?: number;
 	tagIds?: number[];
+	parentTaskId?: number;
 }
 
 export interface TaskUpdateParams {
 	title?: string;
 	description?: string;
-	deadline?: string;
+	deadline?: string | null;
 	estimateDurationHour?: number;
 	priority?: number;
-	categoryId?: number;
+	categoryId?: number | null;
 	tagIds?: number[];
+	parentTaskId?: number | null;
 }
 
 // 查詢、刪除等常用參數
