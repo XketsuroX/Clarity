@@ -1,4 +1,4 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 export interface ITagJSON {
 	id: number;
@@ -8,8 +8,8 @@ export interface ITagJSON {
 
 @Entity()
 export class Tag {
-	@PrimaryColumn({ type: 'int' })
-	id: number;
+	@PrimaryGeneratedColumn()
+	id!: number;
 
 	@Column({ type: 'varchar' })
 	text: string;
@@ -17,8 +17,7 @@ export class Tag {
 	@Column({ type: 'varchar' })
 	color: string;
 
-	constructor(id: number, text: string, color: string = '#000000') {
-		this.id = id;
+	constructor(text: string, color: string = '#000000') {
 		this.text = text;
 		this.color = color;
 	}

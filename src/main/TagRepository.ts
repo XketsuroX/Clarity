@@ -16,14 +16,18 @@ export class TagRepository {
 	async getTagById(id: number): Promise<Tag | null> {
 		return this.ormRepository.findOneBy({ id });
 	}
-
-	async addTag(tag: Tag): Promise<Tag> {
+	async addTag(text: string, color: string): Promise<Tag> {
+		const tag = this.ormRepository.create({ text, color });
 		return this.ormRepository.save(tag);
 	}
 
-	async updateTag(tag: Tag): Promise<boolean> {
-		const result = await this.ormRepository.update(tag.id, tag);
-		return result.affected !== 0;
+	async updateTag(id: number, data: { text?: string; color?: string }): Promise<Tag | null> {
+		const tagToUpdate = await this.getTagById(id);
+		if (!tagToUpdate) {
+			return null;
+		}
+		this.ormRepository.merge(tagToUpdate, data);
+		return this.ormRepository.save(tagToUpdate);
 	}
 
 	async removeTag(id: number): Promise<boolean> {
