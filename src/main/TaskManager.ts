@@ -306,6 +306,50 @@ export class TaskManager {
 	async getPendingTasks(): Promise<Task[]> {
 		return await this.taskRepository.getPendingTasks();
 	}
+
+	/**
+	 * Get task completeness percentage (0..100). Proxy to TaskCalculator.
+	 */
+	async getTaskCompleteness(taskId: number): Promise<number> {
+		return await this.calculator.getTaskCompleteness(taskId);
+	}
+
+	/**
+	 * Get actual vs estimated duration comparison. Proxy to TaskCalculator.
+	 */
+	async getActualVsEstimated(taskId: number): Promise<{
+		estimatedDurationHour: number | null;
+		actualDurationHour: number | null;
+		deltaHour: number | null;
+		deltaPercent: number | null;
+	}> {
+		return await this.calculator.getActualVsEstimated(taskId);
+	}
+
+	/**
+	 * Get average actual vs estimated across all tasks. Proxy to TaskCalculator.
+	 */
+	async getAverageActualVsEstimated(): Promise<{
+		avgDeltaHour: number | null;
+		avgDeltaPercent: number | null;
+		count: number;
+	}> {
+		return await this.calculator.getAverageActualVsEstimated();
+	}
+
+	/**
+	 * Get all descendants for a task. Proxy to TaskDependencyManager.
+	 */
+	async getTaskDescendants(taskId: number): Promise<ITaskJSON[]> {
+		return await this.dependencyManager.getAllDescendants(taskId);
+	}
+
+	/**
+	 * Get all ancestors for a task. Proxy to TaskDependencyManager.
+	 */
+	async getTaskAncestors(taskId: number): Promise<number[]> {
+		return await this.dependencyManager.getAllAncestors(taskId);
+	}
 }
 
 export const taskManager = new TaskManager();

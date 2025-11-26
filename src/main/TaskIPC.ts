@@ -1,7 +1,5 @@
 import { ipcMain } from 'electron';
 import { taskManager } from './TaskManager';
-import { taskDependencyManager } from './TaskDependencyManager';
-import { taskCalculator } from './TaskCalculator';
 import { TaskAddParams, TaskUpdateParams, TaskIdParam } from '../shared/TaskTypes';
 import { CreateTaskData } from './TaskRepository';
 
@@ -49,22 +47,22 @@ export function registerTaskIpcHandlers(): void {
 
 	// 獲取任務的所有後代
 	ipcMain.handle('tasks:getAllDescendants', async (_, params: TaskIdParam) => {
-		return await taskDependencyManager.getAllDescendants(params.taskId);
+		return await taskManager.getTaskDescendants(params.taskId);
 	});
 
 	// 獲取任務的所有祖先
 	ipcMain.handle('tasks:getAllAncestors', async (_, params: TaskIdParam) => {
-		return await taskDependencyManager.getAllAncestors(params.taskId);
+		return await taskManager.getTaskAncestors(params.taskId);
 	});
 
 	// 計算任務的完成度
 	ipcMain.handle('tasks:getCompleteness', async (_, params: TaskIdParam) => {
-		return await taskCalculator.getTaskCompleteness(params.taskId);
+		return await taskManager.getTaskCompleteness(params.taskId);
 	});
 
 	// 計算任務的緊急性
 	ipcMain.handle('tasks:getUrgency', async (_, params: TaskIdParam) => {
-		return await taskCalculator.getTaskUrgency(params.taskId);
+		return await taskManager.getTaskUrgency(params.taskId);
 	});
 
 	// 刷新過期任務
@@ -74,12 +72,12 @@ export function registerTaskIpcHandlers(): void {
 
 	// 取得單一任務的預估與實際工時差值
 	ipcMain.handle('tasks:getActualVsEstimated', async (_, params: TaskIdParam) => {
-		return await taskCalculator.getActualVsEstimated(params.taskId);
+		return await taskManager.getActualVsEstimated(params.taskId);
 	});
 
 	// 計算所有任務的平均預估與實際工時差值
 	ipcMain.handle('tasks:getAverageActualVsEstimated', async () => {
-		return await taskCalculator.getAverageActualVsEstimated();
+		return await taskManager.getAverageActualVsEstimated();
 	});
 
 	// 取得任務的預估剩餘工時
