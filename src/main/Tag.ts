@@ -14,7 +14,7 @@ export class Tag {
 	@Column({ type: 'varchar' })
 	text: string;
 
-	@Column({ type: 'varchar' })
+	@Column({ type: 'varchar', default: '#000000' })
 	color: string;
 
 	constructor(text: string, color: string = '#000000') {

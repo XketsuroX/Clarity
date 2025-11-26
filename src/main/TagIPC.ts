@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { tagManager } from './TagManager';
+import { TagIdParam, TagUpdateParam, TagCreateParam } from '../shared/TagTypes';
 
 export function registerTagIpcHandlers(): void {
 	// 獲取所有標籤
@@ -8,27 +9,24 @@ export function registerTagIpcHandlers(): void {
 	});
 
 	// 獲取單個標籤
-	ipcMain.handle('tags:getById', async (_, tagId: number) => {
-		return await tagManager.getTagById(tagId);
+	ipcMain.handle('tags:getById', async (_, params: TagIdParam) => {
+		return await tagManager.getTagById(params.id);
 	});
 
 	// 添加標籤
-	ipcMain.handle('tags:add', async (_, tagData: { text: string; color: string }) => {
-		const result = await tagManager.addTag(tagData.text, tagData.color);
+	ipcMain.handle('tags:add', async (_, params: TagCreateParam) => {
+		const result = await tagManager.addTag(params.name, params.color);
 		return result;
 	});
 
 	// 更新標籤
-	ipcMain.handle(
-		'tags:update',
-		async (_, tagData: { id: number; text?: string; color?: string }) => {
-			return tagManager.updateTag(tagData.id, tagData.text, tagData.color);
-		}
-	);
+	ipcMain.handle('tags:update', async (_, params: TagIdParam & { data: TagUpdateParam }) => {
+		return tagManager.updateTag(params.id, params.data.name, params.data.color);
+	});
 
 	// 刪除標籤
-	ipcMain.handle('tags:delete', async (_, tagId: number) => {
-		tagManager.deleteTag(tagId);
+	ipcMain.handle('tags:delete', async (_, params: TagIdParam) => {
+		tagManager.deleteTag(params.id);
 		return { success: true };
 	});
 }

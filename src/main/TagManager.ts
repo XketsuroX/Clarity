@@ -33,8 +33,11 @@ export class TagManager {
 		return await this.tagRepository.getTagById(tagId);
 	}
 
-	async addTag(text: string, color: string): Promise<Result<ITagJSON>> {
+	async addTag(text: string, color?: string): Promise<Result<ITagJSON>> {
 		return this.errorHandler.wrapAsync(async () => {
+			if (color === undefined) {
+				color = '#000000';
+			}
 			const newTag = await this.tagRepository.addTag(text, color);
 			this.availableTags.push(newTag);
 			return newTag.toJSON();
