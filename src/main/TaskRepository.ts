@@ -113,7 +113,7 @@ export class TaskRepository {
 		const payload: DeepPartial<Task> = { ...taskUpdates };
 
 		if (categoryId !== undefined) {
-			payload.category = categoryId === null ? null : { id: categoryId };
+			taskToUpdate.category = categoryId === null ? null : ({ id: categoryId } as any);
 		}
 
 		if (parentTaskId !== undefined) {

@@ -378,11 +378,7 @@ onMounted(() => {
 						:class="{ 'is-completed': task.completed }"
 						@click="openTaskDetail(task)"
 					>
-						<div
-							class="task-check"
-							@click.stop="handleToggleComplete(task)"
-							@click="handleToggleComplete(task)"
-						>
+						<div class="task-check" @click.stop="handleToggleComplete(task)">
 							<div class="custom-checkbox">
 								<el-icon v-if="task.completed"><Check /></el-icon>
 							</div>
