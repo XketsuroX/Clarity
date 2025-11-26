@@ -5,22 +5,8 @@ describe('Tag Entity', () => {
 		const tag = new Tag('My Tag');
 
 		expect(tag.id).toBe(1);
-		expect(tag.text).toBe('My Tag');
+		expect(tag.name).toBe('My Tag');
 		expect(tag.color).toBe('#000000');
-	});
-
-	it('should rename the tag', () => {
-		const tag = new Tag('Old Name');
-		tag.rename('New Name');
-
-		expect(tag.text).toBe('New Name');
-	});
-
-	it('should change color', () => {
-		const tag = new Tag('Tag');
-		tag.changeColor('#FFFFFF');
-
-		expect(tag.color).toBe('#FFFFFF');
 	});
 
 	it('should return correct JSON structure', () => {
@@ -29,7 +15,7 @@ describe('Tag Entity', () => {
 
 		expect(json).toEqual({
 			id: 1,
-			text: 'JSON Tag',
+			name: 'JSON Tag',
 			color: '#FF0000',
 		});
 	});

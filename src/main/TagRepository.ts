@@ -16,12 +16,12 @@ export class TagRepository {
 	async getTagById(id: number): Promise<Tag | null> {
 		return this.ormRepository.findOneBy({ id });
 	}
-	async addTag(text: string, color: string): Promise<Tag> {
-		const tag = this.ormRepository.create({ text, color });
+	async addTag(name: string, color: string): Promise<Tag> {
+		const tag = this.ormRepository.create({ name: name, color });
 		return this.ormRepository.save(tag);
 	}
 
-	async updateTag(id: number, data: { text?: string; color?: string }): Promise<Tag | null> {
+	async updateTag(id: number, data: { name?: string; color?: string }): Promise<Tag | null> {
 		const tagToUpdate = await this.getTagById(id);
 		if (!tagToUpdate) {
 			return null;

@@ -2,7 +2,7 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 export interface ITagJSON {
 	id: number;
-	text: string;
+	name: string;
 	color: string;
 }
 
@@ -12,28 +12,20 @@ export class Tag {
 	id!: number;
 
 	@Column({ type: 'varchar' })
-	text: string;
+	name: string;
 
 	@Column({ type: 'varchar', default: '#000000' })
 	color: string;
 
-	constructor(text: string, color: string = '#000000') {
-		this.text = text;
+	constructor(name: string, color: string = '#000000') {
+		this.name = name;
 		this.color = color;
-	}
-
-	changeColor(color: string): void {
-		this.color = color;
-	}
-
-	rename(text: string): void {
-		this.text = text;
 	}
 
 	toJSON(): ITagJSON {
 		return {
 			id: this.id,
-			text: this.text,
+			name: this.name,
 			color: this.color,
 		};
 	}

@@ -33,20 +33,20 @@ export class TagManager {
 		return await this.tagRepository.getTagById(tagId);
 	}
 
-	async addTag(text: string, color?: string): Promise<Result<ITagJSON>> {
+	async addTag(name: string, color?: string): Promise<Result<ITagJSON>> {
 		return this.errorHandler.wrapAsync(async () => {
 			if (color === undefined) {
 				color = '#000000';
 			}
-			const newTag = await this.tagRepository.addTag(text, color);
+			const newTag = await this.tagRepository.addTag(name, color);
 			this.availableTags.push(newTag);
 			return newTag.toJSON();
 		}, 'Failed to create tag');
 	}
 
-	async updateTag(id: number, text?: string, color?: string): Promise<Result<ITagJSON | null>> {
+	async updateTag(id: number, name?: string, color?: string): Promise<Result<ITagJSON | null>> {
 		return this.errorHandler.wrapAsync(async () => {
-			const updatedTag = await this.tagRepository.updateTag(id, { text, color });
+			const updatedTag = await this.tagRepository.updateTag(id, { name, color });
 			// Update in available tags if present
 			const index = this.availableTags.findIndex((t) => t.id === id);
 			if (index !== -1 && updatedTag) {
