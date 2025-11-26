@@ -5,6 +5,7 @@ import {
 	ManyToMany,
 	ManyToOne,
 	PrimaryGeneratedColumn,
+	Tree,
 	TreeChildren,
 	TreeParent,
 } from 'typeorm';
@@ -31,6 +32,7 @@ export interface ITaskJSON {
 	state: string;
 	isSplittable: boolean;
 }
+@Tree('closure-table')
 @Entity()
 export class Task {
 	@PrimaryGeneratedColumn()
