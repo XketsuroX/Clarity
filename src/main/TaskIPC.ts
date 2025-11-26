@@ -81,4 +81,9 @@ export function registerTaskIpcHandlers(): void {
 	ipcMain.handle('tasks:getAverageActualVsEstimated', async () => {
 		return await taskCalculator.getAverageActualVsEstimated();
 	});
+
+	// 取得任務的預估剩餘工時
+	ipcMain.handle('tasks:getEstimatedDuration', async (_, params: TaskIdParam) => {
+		return await taskManager.getEstimatedTaskDuration(params.taskId);
+	});
 }
