@@ -26,7 +26,7 @@ export interface ITaskJSON {
 	estimateDurationHour: number;
 	completeness: number;
 	actualDurationHour?: number | null;
-	tags: Tag[];
+	tagIds: number[];
 	childrenTaskIds: number[];
 	parentTaskId?: number | null;
 	state: string;
@@ -111,7 +111,7 @@ export class Task {
 			actualStartDate: this.actualStartDate?.toISOString() ?? null,
 			actualEndDate: this.actualEndDate?.toISOString() ?? null,
 			actualDurationHour: this.actualDurationHour ?? null,
-			tags: Array.isArray(this.tags) ? this.tags : [],
+			tagIds: Array.isArray(this.tags) ? this.tags.map((tag) => tag.id) : [],
 			childrenTaskIds: Array.isArray(this.childrenTasks)
 				? this.childrenTasks.map((task) => task.id)
 				: [],
