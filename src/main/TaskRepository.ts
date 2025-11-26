@@ -121,7 +121,7 @@ export class TaskRepository {
 		}
 
 		if (tagIds !== undefined) {
-			payload.tags = tagIds.map((tagId) => ({ id: tagId }));
+			taskToUpdate.tags = tagIds.map((tagId) => ({ id: tagId } as any));
 		}
 
 		this.ormRepository.merge(taskToUpdate, payload);

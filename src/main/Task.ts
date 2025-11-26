@@ -80,7 +80,7 @@ export class Task {
 	@Column({ type: 'float', nullable: true })
 	actualDurationHour!: number | null;
 
-	@ManyToMany(() => Tag, { cascade: true })
+	@ManyToMany(() => Tag)
 	@JoinTable()
 	tags!: Tag[];
 
