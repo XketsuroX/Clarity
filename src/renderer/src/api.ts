@@ -1,3 +1,5 @@
+import { TaskAddParams } from 'src/shared/IpcTypes';
+
 export function unwrapResult<T>(res: unknown): T {
 	// If preload provided an unwrap helper, delegate to it
 	// @ts	-ignore
@@ -40,7 +42,7 @@ export interface Task {
 	actualDurationHour: number | null;
 	tags: Tag[];
 	childrenTasks?: Task[];
-	state: number;
+	state: string;
 }
 
 // API functions, wrapping IPC calls
@@ -50,13 +52,21 @@ export async function fetchTasks(): Promise<Task[]> {
 }
 
 export async function createTask(task: Partial<Task>): Promise<Task> {
-	const result = await window.electron.ipcRenderer.invoke('tasks:add', task);
+	const params: TaskAddParams = {
+		title: task.title ?? '',
+		description: task.description,
+		deadline: task.deadline ?? undefined,
+		estimateDurationHour: task.estimateDurationHour ?? undefined,
+		priority: task.priority ?? undefined,
+	};
+	console.log('type: ' + typeof params);
+	const result = await window.electron.ipcRenderer.invoke('tasks:add', params);
 	return unwrapResult(result);
 }
 
-export async function toggleTaskComplete(id: number, completed: boolean): Promise<Task> {
+export async function toggleTaskComplete(id: number): Promise<Task> {
 	// Here we assume the backend update supports partial fields
-	const result = await window.electron.ipcRenderer.invoke('tasks:update', id, { completed });
+	const result = await window.electron.ipcRenderer.invoke('tasks:toggleComplete', id);
 	return unwrapResult(result);
 }
 

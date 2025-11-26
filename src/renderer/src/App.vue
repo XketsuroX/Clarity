@@ -63,7 +63,7 @@ const handleCreate = async () => {
 // Toggle Complete
 const handleToggleComplete = async (row: Task) => {
 	try {
-		await toggleTaskComplete(row.id, row.completed);
+		await toggleTaskComplete(row.id);
 		ElMessage.success(row.completed ? 'Task completed' : 'Task reopened');
 	} catch (err) {
 		row.completed = !row.completed; // Revert on error
@@ -85,8 +85,6 @@ const runSchedule = async () => {
 const formatDuration = (hours: number | null) => {
 	return hours ? `${hours}h` : '-';
 };
-
-
 
 onMounted(() => {
 	loadTasks();
@@ -132,12 +130,12 @@ onMounted(() => {
 				</template>
 
 				<el-table
+					v-loading="loading"
 					:data="tasks"
 					row-key="id"
 					default-expand-all
 					style="width: 100%; background-color: transparent"
 					:header-cell-style="{ background: '#1d1e1f', color: '#a0a0a0' }"
-					v-loading="loading"
 				>
 					<el-table-column width="50">
 						<template #default="{ row }">

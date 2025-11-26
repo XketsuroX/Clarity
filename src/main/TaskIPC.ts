@@ -34,6 +34,14 @@ export function registerTaskIpcHandlers(): void {
 		return await taskManager.updateTask(params.taskId, updateData);
 	});
 
+	ipcMain.handle('tasks:toggleComplete', async (_, params: TaskIdParam) => {
+		return await taskManager.toggleComplete(params.taskId);
+	});
+
+	ipcMain.handle('tasks:toggleStart', async (_, params: TaskIdParam) => {
+		return await taskManager.startTask(params.taskId);
+	});
+
 	// 刪除任務
 	ipcMain.handle('tasks:remove', async (_, params: TaskIdParam) => {
 		return await taskManager.removeTask(params.taskId);
