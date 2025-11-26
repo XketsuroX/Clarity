@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
 	Plus,
 	Calendar,
@@ -27,10 +27,17 @@ import {
 	updateCategory,
 	deleteCategory,
 	createTag,
+	updateTag,
+	deleteTag,
 	generateSchedule,
 } from './api';
-import { TaskAddParams, TaskJSON } from '../../shared/TaskTypes';
-import { CategoryJSON } from '../../shared/CategoryTypes';
+import { TaskAddParams, TaskJSON, TaskUpdateParams } from '../../shared/TaskTypes';
+import {
+	CategoryCreateParam,
+	CategoryIdParam,
+	CategoryJSON,
+	CategoryUpdateParam,
+} from '../../shared/CategoryTypes';
 import { TagJSON, TagCreateParam } from '../../shared/TagTypes';
 
 // --- State ---
@@ -44,6 +51,7 @@ const showManageModal = ref(false);
 const showTaskDetailModal = ref(false);
 const currentTask = ref<Task | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null); // 用於編輯分類
+const editingTag = ref<TagUpdateParam | null>(null);
 
 // Form Data
 const newTask = ref<TaskAddParams>({
@@ -98,18 +106,16 @@ const getCategoryName = (id?: number) => {
 	return cat ? cat.title : null;
 };
 
-const getTaskTags = (tagIds?: number[]) => {
-	if (!tagIds || tagIds.length === 0) return [];
-	return tags.value.filter((t) => tagIds.includes(t.id));
-};
+const getTaskTags = (tagIds?: number[]): TagJSON[] =>
+	tags.value.filter((tag) => tagIds?.includes(tag.id));
 
-const formatDate = (date: string | Date | undefined) => {
+const formatDate = (date: string | Date | undefined): string => {
 	if (!date) return '';
 	return new Date(date).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' });
 };
 
 // --- Actions ---
-const loadData = async () => {
+const loadData = async (): Promise<void> => {
 	loading.value = true;
 	try {
 		const [tasksData, catsData, tagsData] = await Promise.all([
@@ -127,7 +133,7 @@ const loadData = async () => {
 	}
 };
 
-const handleCreate = async () => {
+const handleCreate = async (): Promise<void> => {
 	if (!newTask.value.title) return;
 	try {
 		const payload = { ...newTask.value };
@@ -151,76 +157,103 @@ const handleCreate = async () => {
 		ElMessage.error('Failed to create: ' + err);
 	}
 };
-const handleCreateCategory = async () => {
-	if (!newCategoryTitle.value.trim()) return;
-	try {
-		await createCategory(newCategoryTitle.value);
-		ElMessage.success('Category added');
-		newCategoryTitle.value = '';
-		categories.value = await fetchCategories();
-	} catch (err) {
-		ElMessage.error('Failed to add category');
-	}
+
+const handleCreateTag = async (): Promise<void> => {
+	if (!newTagForm.value.name.trim()) return;
+	const payload: TagCreateParam = {
+		name: newTagForm.value.name.trim(),
+		color: newTagForm.value.color,
+	};
+	const created = await createTag(payload);
+	tags.value = [...tags.value, created];
+	newTagForm.value = { name: '', color: '#409EFF' };
+	ElMessage.success('Tag added');
 };
 
-const handleCreateTag = async () => {
-	if (!newTagForm.value.name.trim()) return;
-	try {
-		await createTag(newTagForm.value);
-		ElMessage.success('Tag added');
-		newTagForm.value.name = '';
-		// 隨機換個顏色，方便下次新增
-		const colors = ['#67C23A', '#E6A23C', '#F56C6C', '#909399', '#409EFF'];
-		newTagForm.value.color = colors[Math.floor(Math.random() * colors.length)];
-		tags.value = await fetchTags();
-	} catch (err) {
-		ElMessage.error('Failed to add tag');
+const startTagEdit = (tag: TagJSON): void => {
+	editingTag.value = {
+		id: tag.id,
+		name: tag.name,
+		color: tag.color ?? '#409EFF',
+	};
+};
+
+const handleUpdateTagEntry = async () => {
+	if (!editingTag.value || !editingTag.value.name?.trim()) {
+		ElMessage.warning('Tag name cannot be empty');
+		return;
 	}
+	const updated = await updateTag({
+		id: editingTag.value.id,
+		name: editingTag.value.name.trim(),
+		color: editingTag.value.color,
+	});
+	tags.value = tags.value.map((t) => (t.id === updated.id ? updated : t));
+	editingTag.value = null;
+	ElMessage.success('Tag updated');
+};
+
+const handleDeleteTagEntry = async (id: number) => {
+	const payload: TagIdParam = { id };
+	await ElMessageBox.confirm('Delete this tag? It will be removed from all tasks.', 'Warning', {
+		type: 'warning',
+	});
+	await deleteTag(payload);
+	tags.value = tags.value.filter((t) => t.id !== id);
+	tasks.value = tasks.value.map((task) => ({
+		...task,
+		tagIds: task.tagIds?.filter((tagId) => tagId !== id) ?? [],
+	}));
+	ElMessage.success('Tag deleted');
 };
 
 const handleToggleComplete = async (task: TaskJSON) => {
 	try {
-		await toggleTaskComplete(task.id);
-		task.completed = !task.completed; // Optimistic update
-
-		// 如果是完成任務，給一點視覺反饋
-		if (task.completed) {
-			ElMessage.success({ message: 'Task completed', duration: 1500 });
-		}
+		const updated = await toggleTaskComplete({ taskId: task.id });
+		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
+		ElMessage.success(updated.completed ? 'Task completed' : 'Task reopened');
 	} catch (err) {
 		ElMessage.error('Update failed');
 	}
 };
+
 // --- Actions: Category Management ---
+const handleCreateCategory = async () => {
+	if (!newCategoryTitle.value.trim()) return;
+	const payload: CategoryCreateParam = { title: newCategoryTitle.value.trim() };
+	const created = await createCategory(payload);
+	categories.value = [...categories.value, created]; // 立即加入
+	newCategoryTitle.value = '';
+	ElMessage.success('Category added');
+};
+
 const handleUpdateCategory = async (id: number, title: string) => {
-	try {
-		await updateCategory(id, title);
-		ElMessage.success('Category updated');
-		editingCategory.value = null;
-		categories.value = await fetchCategories();
-	} catch (err) {
-		ElMessage.error('Failed to update category');
+	if (!title.trim()) {
+		ElMessage.warning('Category title cannot be empty');
+		return;
 	}
+	const payload: CategoryUpdateParam & { newTitle: string } = { id, newTitle: title.trim() };
+	const updated = await updateCategory(payload);
+	categories.value = categories.value.map((c) => (c.id === updated.id ? updated : c));
+	editingCategory.value = null;
+	ElMessage.success('Category updated');
 };
 
 const handleDeleteCategory = async (id: number) => {
-	try {
-		await ElMessageBox.confirm(
-			'Delete this category? Tasks will be uncategorized.',
-			'Warning',
-			{
-				confirmButtonText: 'Delete',
-				cancelButtonText: 'Cancel',
-				type: 'warning',
-			}
-		);
-		await deleteCategory(id);
-		ElMessage.success('Category deleted');
-		categories.value = await fetchCategories();
-		loadData(); // 重新載入任務以更新分類狀態
-	} catch (err) {
-		if (err !== 'cancel') ElMessage.error('Failed to delete category');
-	}
+	const payload: CategoryIdParam = { id };
+	await ElMessageBox.confirm(
+		'Delete this category? Tasks will become uncategorized.',
+		'Warning',
+		{
+			type: 'warning',
+		}
+	);
+	await deleteCategory(payload);
+	categories.value = categories.value.filter((c) => c.id !== id);
+	tasks.value = tasks.value.map((t) =>
+		t.categoryId === id ? { ...t, categoryId: undefined } : t
+	);
+	ElMessage.success('Category deleted');
 };
 
 // --- Actions: Task Detail & Operations ---
@@ -233,16 +266,26 @@ const openTaskDetail = (task: Task) => {
 const handleSaveTaskDetail = async () => {
 	if (!currentTask.value) return;
 	try {
-		const { id, ...updates } = currentTask.value;
-		// 轉換 deadline 為 ISO string
-		if (updates.deadline) {
-			updates.deadline = new Date(updates.deadline).toISOString();
-		}
+		const updatePayload: TaskUpdateParams = {
+			title: currentTask.value.title,
+			description: currentTask.value.description,
+			deadline: currentTask.value.deadline
+				? new Date(currentTask.value.deadline).toISOString()
+				: null,
+			estimateDurationHour: currentTask.value.estimateDurationHour,
+			priority: currentTask.value.priority,
+			categoryId: currentTask.value.categoryId ?? null,
+			tagIds: currentTask.value.tagIds ?? [],
+		};
 
-		await updateTask(id, updates);
-		ElMessage.success('Task updated');
+		const updated = await updateTask({ taskId: currentTask.value.id }, updatePayload);
+		console.log('Updated task:', updated);
+		// 立刻套用最新任務，避免畫面同時出現舊/新副本
+		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
+
 		showTaskDetailModal.value = false;
-		loadData(); // 重新載入列表
+		await loadData(); // 最後再跟主進程資料庫同步
+		ElMessage.success('Task updated');
 	} catch (err) {
 		ElMessage.error('Failed to update task: ' + err);
 	}
@@ -256,10 +299,10 @@ const handleTaskDelete = async () => {
 			cancelButtonText: 'Cancel',
 			type: 'warning',
 		});
-		await removeTask(currentTask.value.id);
-		ElMessage.success('Task deleted');
+		await removeTask({ taskId: currentTask.value.id });
+		tasks.value = tasks.value.filter((t) => t.id !== currentTask.value!.id);
 		showTaskDetailModal.value = false;
-		loadData();
+		ElMessage.success('Task deleted');
 	} catch (err) {
 		if (err !== 'cancel') ElMessage.error('Failed to delete task');
 	}
@@ -268,14 +311,15 @@ const handleTaskDelete = async () => {
 const handleToggleStart = async () => {
 	if (!currentTask.value) return;
 	try {
-		const updated = await toggleTaskStart(currentTask.value.id);
-		currentTask.value.state = updated.state; // 更新本地狀態顯示
-		ElMessage.success(updated.state === 'In Progress' ? 'Task Started' : 'Task Paused');
-		loadData(); // 同步列表狀態
+		const updated = await toggleTaskStart({ taskId: currentTask.value.id });
+		currentTask.value = updated;
+		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
+		ElMessage.success(updated.state === 'In Progress' ? 'Task started' : 'Task paused');
 	} catch (err) {
 		ElMessage.error('Failed to toggle start');
 	}
 };
+
 const runSchedule = async () => {
 	try {
 		scheduleResult.value = await generateSchedule(scheduleConfig.value.hours);
@@ -394,6 +438,7 @@ onMounted(() => {
 							v-model="newTask.categoryId"
 							placeholder="None"
 							style="width: 100%"
+							clearable
 						>
 							<el-option
 								v-for="c in categories"
@@ -421,9 +466,9 @@ onMounted(() => {
 						placeholder="Select tags"
 						style="width: 100%"
 					>
-						<el-option v-for="t in tags" :key="t.id" :label="t.title" :value="t.id">
+						<el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id">
 							<span :style="{ color: t.color, marginRight: '8px' }">●</span>
-							{{ t.title }}
+							{{ t.name }}
 						</el-option>
 					</el-select>
 				</el-form-item>
@@ -498,7 +543,7 @@ onMounted(() => {
 				<el-tab-pane label="Tags" name="tags">
 					<div class="manage-input-row">
 						<el-input
-							v-model="newTagForm.title"
+							v-model="newTagForm.name"
 							placeholder="New Tag Name"
 							style="flex: 1"
 						/>
@@ -507,8 +552,38 @@ onMounted(() => {
 					</div>
 					<div class="manage-list">
 						<div v-for="t in tags" :key="t.id" class="manage-item">
-							<span class="tag-dot" :style="{ backgroundColor: t.color }"></span>
-							{{ t.name }}
+							<template v-if="editingTag && editingTag.id === t.id">
+								<el-input
+									v-model="editingTag.name"
+									size="small"
+									style="flex: 1"
+									@keyup.enter="handleUpdateTagEntry"
+								/>
+								<el-color-picker v-model="editingTag.color" size="small" />
+								<el-button
+									size="small"
+									type="success"
+									:icon="Check"
+									@click="handleUpdateTagEntry"
+								/>
+								<el-button size="small" @click="editingTag = null">X</el-button>
+							</template>
+							<template v-else>
+								<span
+									class="tag-dot"
+									:style="{ backgroundColor: t.color || '#909399' }"
+								></span>
+								<span class="manage-text">{{ t.name }}</span>
+								<div class="manage-actions">
+									<el-button link :icon="Edit" @click="startTagEdit(t)" />
+									<el-button
+										link
+										type="danger"
+										:icon="Delete"
+										@click="handleDeleteTagEntry(t.id)"
+									/>
+								</div>
+							</template>
 						</div>
 					</div>
 				</el-tab-pane>
@@ -540,7 +615,11 @@ onMounted(() => {
 
 					<div class="form-row">
 						<el-form-item label="Category">
-							<el-select v-model="currentTask.categoryId" placeholder="None">
+							<el-select
+								v-model="currentTask.categoryId"
+								placeholder="None"
+								clearable
+							>
 								<el-option
 									v-for="c in categories"
 									:key="c.id"
@@ -557,6 +636,21 @@ onMounted(() => {
 							/>
 						</el-form-item>
 					</div>
+
+					<el-form-item label="Tags" v-if="currentTask">
+						<el-select
+							v-model="currentTask.tagIds"
+							multiple
+							placeholder="Select tags"
+							clearable
+						>
+							<el-option v-for="t in tags" :key="t.id" :label="t.name" :value="t.id">
+								<span :style="{ color: t.color ?? '#909399', marginRight: '6px' }"
+									>●</span
+								>{{ t.name }}
+							</el-option>
+						</el-select>
+					</el-form-item>
 
 					<el-form-item label="Deadline">
 						<el-date-picker

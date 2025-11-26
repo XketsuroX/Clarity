@@ -1,6 +1,6 @@
 import { TaskJSON, TaskAddParams, TaskUpdateParams, TaskIdParam } from '../../shared/TaskTypes';
-import { CategoryJSON, CategoryCreateParam } from '../../shared/CategoryTypes';
-import { TagCreateParam, TagJSON } from '../../shared/TagTypes';
+import { CategoryJSON, CategoryCreateParam, CategoryUpdateParam } from '../../shared/CategoryTypes';
+import { TagCreateParam, TagIdParam, TagJSON, TagUpdateParam } from '../../shared/TagTypes';
 
 export function unwrapResult<T>(res: unknown): T {
 	// If preload provided an unwrap helper, delegate to it
@@ -49,9 +49,16 @@ export async function createTask(task: Partial<TaskAddParams>): Promise<TaskJSON
 	return unwrapResult(result);
 }
 
-export async function updateTask(id: TaskIdParam, data: Partial<TaskUpdateParams>): Promise<TaskJSON> {
+export async function updateTask(
+	id: TaskIdParam,
+	data: Partial<TaskUpdateParams>
+): Promise<TaskJSON> {
 	const params = JSON.parse(JSON.stringify(data));
-	return await window.electron.ipcRenderer.invoke('tasks:update', id, params);
+	console.log('Updating task with params:', params);
+	return await window.electron.ipcRenderer.invoke('tasks:update', {
+		...id,
+		data: params,
+	});
 }
 
 export async function removeTask(id: TaskIdParam): Promise<void> {
@@ -77,27 +84,36 @@ export async function generateSchedule(hours: number): Promise<any[]> {
 export async function fetchCategories(): Promise<CategoryJSON[]> {
 	return unwrapResult(await window.electron.ipcRenderer.invoke('categories:getAll'));
 }
-export async function createCategory(title: string): Promise<CategoryJSON> {
-	return unwrapResult(await window.electron.ipcRenderer.invoke('categories:create', title));
+export async function createCategory(params: CategoryCreateParam): Promise<CategoryJSON> {
+	return unwrapResult(await window.electron.ipcRenderer.invoke('categories:create', params));
 }
 
-export async function updateCategory(id: number, title: string): Promise<CategoryJSON> {
-	return await window.electron.ipcRenderer.invoke('categories:update', { id, title });
+export async function updateCategory(params: CategoryUpdateParam): Promise<CategoryJSON> {
+	return await window.electron.ipcRenderer.invoke('categories:update', params);
 }
 
-export async function deleteCategory(id: number): Promise<void> {
-	return await window.electron.ipcRenderer.invoke('categories:delete', id);
+export async function deleteCategory(params: CategoryIdParam): Promise<void> {
+	return await window.electron.ipcRenderer.invoke('categories:delete', params);
 }
 // Tags
 export async function fetchTags(): Promise<TagJSON[]> {
 	return await window.electron.ipcRenderer.invoke('tags:getAll');
 }
 
-export async function createTag(tag: TagCreateParam): Promise<TagJSON> {
-	console.log('createTag in api.ts called' + JSON.stringify(tag));
-	return await window.electron.ipcRenderer.invoke('tags:add', tag);
+export async function createTag(params: TagCreateParam): Promise<TagJSON> {
+	const result = await window.electron.ipcRenderer.invoke('tags:add', params);
+	return unwrapResult(result);
 }
 
+export async function updateTag(params: TagUpdateParam): Promise<TagJSON> {
+	const { id, ...data } = params;
+	const result = await window.electron.ipcRenderer.invoke('tags:update', { id, data });
+	return unwrapResult(result);
+}
+
+export async function deleteTag(params: TagIdParam): Promise<void> {
+	return await window.electron.ipcRenderer.invoke('tags:delete', params);
+}
 // Helper function: unwrap the Result structure returned by the backend (if any)
 // function unwrapResult(res: any) {
 // 	if (res && res.error) throw new Error(res.error.message);
