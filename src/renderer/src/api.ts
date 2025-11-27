@@ -34,17 +34,32 @@ export async function fetchTasks(): Promise<TaskJSON[]> {
 }
 
 export async function createTask(task: Partial<TaskAddParams>): Promise<TaskJSON> {
-	const params: TaskAddParams = {
-		title: task.title ?? '',
-		description: task.description,
-		categoryId: task.categoryId ?? undefined,
-		deadline: task.deadline ?? undefined,
-		estimateDurationHour: task.estimateDurationHour ?? 0,
-		priority: task.priority ?? undefined,
-		tagIds: task.tagIds ?? [1],
-		parentTaskId: task.parentTaskId ?? undefined,
+	// const params: TaskAddParams = {
+	// 	title: task.title ?? '',
+	// 	description: task.description,
+	// 	categoryId: task.categoryId ?? undefined,
+	// 	deadline: task.deadline ?? undefined,
+	// 	estimateDurationHour: task.estimateDurationHour ?? 0,
+	// 	priority: task.priority ?? undefined,
+	// 	tagIds: task.tagIds ?? [1],
+	// 	parentTaskId: task.parentTaskId ?? undefined,
+	// };
+
+	const defaults: Partial<TaskAddParams> = {
+		title: '',
+		estimateDurationHour: 0,
+		tagIds: [], // 建議預設為空陣列，除非你確定要預設 tagId 1
+		priority: 0,
 	};
-	console.log('type: ' + typeof params);
+
+	const cleanInput = JSON.parse(JSON.stringify(task));
+
+	// 3. 合併：預設值 < 輸入值
+	const params: TaskAddParams = {
+		...defaults,
+		...cleanInput,
+	};
+	console.log('param: ' + JSON.stringify(params));
 	const result = await window.electron.ipcRenderer.invoke('tasks:add', params);
 	return unwrapResult(result);
 }

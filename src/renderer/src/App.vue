@@ -509,6 +509,15 @@ onMounted(() => {
 						</el-select>
 					</el-form-item>
 
+					<el-form-item label="Priority">
+						<el-select v-model="newTask.priority" style="width: 100%">
+							<el-option label="Low" :value="0" />
+							<el-option label="Medium" :value="1" />
+							<el-option label="High" :value="2" />
+							<el-option label="Urgent" :value="3" />
+						</el-select>
+					</el-form-item>
+
 					<el-form-item label="Duration (h)">
 						<el-input-number
 							v-model="newTask.estimateDurationHour"
@@ -742,6 +751,16 @@ onMounted(() => {
 								/>
 							</el-select>
 						</el-form-item>
+
+						<el-form-item label="Priority">
+							<el-select v-model="currentTask.priority">
+								<el-option label="Low" :value="0" />
+								<el-option label="Medium" :value="1" />
+								<el-option label="High" :value="2" />
+								<el-option label="Urgent" :value="3" />
+							</el-select>
+						</el-form-item>
+
 						<el-form-item label="Duration (h)">
 							<el-input-number
 								v-model="currentTask.estimateDurationHour"
