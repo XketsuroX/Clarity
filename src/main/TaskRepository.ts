@@ -53,7 +53,7 @@ export class TaskRepository {
 	 */
 	async findAll(): Promise<Task[]> {
 		return this.ormRepository.find({
-			relations: ['category', 'tags'],
+			relations: ['category', 'tags', 'parentTask'],
 			order: { title: 'ASC' },
 		});
 	}

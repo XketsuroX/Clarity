@@ -13,6 +13,8 @@ import {
 	Edit,
 	VideoPlay,
 	VideoPause,
+	ArrowRight,
+	Back,
 } from '@element-plus/icons-vue';
 import {
 	fetchTasks,
@@ -38,7 +40,7 @@ import {
 	CategoryJSON,
 	CategoryUpdateParam,
 } from '../../shared/CategoryTypes';
-import { TagJSON, TagCreateParam } from '../../shared/TagTypes';
+import { TagJSON, TagCreateParam, TagUpdateParam } from '../../shared/TagTypes';
 
 // --- State ---
 const tasks = ref<TaskJSON[]>([]);
@@ -52,7 +54,7 @@ const showTaskDetailModal = ref(false);
 const currentTask = ref<Task | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null); // 用於編輯分類
 const editingTag = ref<TagUpdateParam | null>(null);
-
+const newSubtaskTitle = ref('');
 // Form Data
 const newTask = ref<TaskAddParams>({
 	title: '',
@@ -72,9 +74,11 @@ const activeCollapseItems = ref<(string | number)[]>(['uncategorized']);
 const groupedTasks = computed(() => {
 	const groups: { id: number | string; title: string; tasks: TaskJSON[] }[] = [];
 
+	const rootTasks = tasks.value.filter((t) => !t.parentTaskId);
+
 	// 1. 處理已分類的任務
 	categories.value.forEach((cat) => {
-		const catTasks = tasks.value.filter((t) => t.categoryId === cat.id);
+		const catTasks = rootTasks.filter((t) => t.categoryId === cat.id);
 		// 即使分類是空的也顯示，這樣才有「文件夾」的感覺
 		groups.push({
 			id: cat.id,
@@ -84,7 +88,7 @@ const groupedTasks = computed(() => {
 	});
 
 	// 2. 處理未分類 (Uncategorized)
-	const noCatTasks = tasks.value.filter((t) => !t.categoryId);
+	const noCatTasks = rootTasks.filter((t) => !t.categoryId);
 	if (noCatTasks.length > 0) {
 		groups.push({
 			id: 'uncategorized',
@@ -94,6 +98,16 @@ const groupedTasks = computed(() => {
 	}
 
 	return groups;
+});
+
+const currentSubtasks = computed(() => {
+	if (!currentTask.value) return [];
+	return tasks.value.filter((t) => t.parentTaskId === currentTask.value?.id);
+});
+
+const parentTask = computed(() => {
+	if (!currentTask.value?.parentTaskId) return null;
+	return tasks.value.find((t) => t.id === currentTask.value?.parentTaskId);
 });
 
 const scheduleConfig = ref({ hours: 4 });
@@ -276,6 +290,8 @@ const handleSaveTaskDetail = async () => {
 			priority: currentTask.value.priority,
 			categoryId: currentTask.value.categoryId ?? null,
 			tagIds: currentTask.value.tagIds ?? [],
+
+			parentTaskId: currentTask.value.parentTaskId ?? null,
 		};
 
 		const updated = await updateTask({ taskId: currentTask.value.id }, updatePayload);
@@ -326,6 +342,49 @@ const runSchedule = async () => {
 		ElMessage.success(`Found ${scheduleResult.value.length} tasks`);
 	} catch (err) {
 		ElMessage.error('Scheduling failed: ' + err);
+	}
+};
+
+const handleAddSubtask = async () => {
+	if (!newSubtaskTitle.value.trim() || !currentTask.value) return;
+
+	try {
+		const payload: TaskAddParams = {
+			title: newSubtaskTitle.value.trim(),
+			estimateDurationHour: 0.5,
+			priority: 0,
+			// 強制繼承父任務的分類
+			categoryId: currentTask.value.categoryId ?? undefined,
+			tagIds: [],
+			parentTaskId: currentTask.value.id, // 設定父任務 ID
+		};
+
+		const created = await createTask(payload);
+		tasks.value = [...tasks.value, created];
+		newSubtaskTitle.value = '';
+		ElMessage.success('Subtask added');
+	} catch (err) {
+		ElMessage.error('Failed to add subtask');
+	}
+};
+
+const openSubtaskDetail = (subtask: TaskJSON) => {
+	currentTask.value = JSON.parse(JSON.stringify(subtask));
+};
+
+const backToParentTask = () => {
+	if (parentTask.value) {
+		currentTask.value = JSON.parse(JSON.stringify(parentTask.value));
+	}
+};
+
+const handleTaskDeleteWrapper = async (taskToDelete: TaskJSON) => {
+	try {
+		await removeTask({ taskId: taskToDelete.id });
+		tasks.value = tasks.value.filter((t) => t.id !== taskToDelete.id);
+		ElMessage.success('Subtask deleted');
+	} catch (err) {
+		ElMessage.error('Failed to delete subtask');
 	}
 };
 
@@ -595,6 +654,11 @@ onMounted(() => {
 			destroy-on-close
 		>
 			<div v-if="currentTask" class="detail-container">
+				<div v-if="parentTask" class="parent-nav" @click="backToParentTask">
+					<el-icon><Back /></el-icon>
+					<span>Parent: {{ parentTask.title }}</span>
+				</div>
+
 				<el-form label-position="top">
 					<el-form-item label="Title">
 						<el-input v-model="currentTask.title" size="large" />
@@ -609,12 +673,61 @@ onMounted(() => {
 						/>
 					</el-form-item>
 
+					<div class="subtasks-section">
+						<div class="subtasks-header">Subtasks</div>
+
+						<div class="subtask-list" v-if="currentSubtasks.length > 0">
+							<div v-for="sub in currentSubtasks" :key="sub.id" class="subtask-item">
+								<div class="task-check" @click.stop="handleToggleComplete(sub)">
+									<div
+										class="custom-checkbox"
+										:class="{ checked: sub.completed }"
+									>
+										<el-icon v-if="sub.completed"><Check /></el-icon>
+									</div>
+								</div>
+
+								<!-- 點擊標題進入子任務詳情 -->
+								<span
+									class="subtask-title clickable"
+									:class="{ 'is-completed': sub.completed }"
+									@click="openSubtaskDetail(sub)"
+								>
+									{{ sub.title }}
+									<el-icon class="arrow-icon"><ArrowRight /></el-icon>
+								</span>
+
+								<el-button
+									link
+									type="danger"
+									size="small"
+									:icon="Delete"
+									@click="handleTaskDeleteWrapper(sub)"
+								/>
+							</div>
+						</div>
+
+						<div class="subtask-input-row">
+							<el-input
+								v-model="newSubtaskTitle"
+								placeholder="Add a subtask..."
+								size="small"
+								@keyup.enter="handleAddSubtask"
+							>
+								<template #append>
+									<el-button :icon="Plus" @click="handleAddSubtask" />
+								</template>
+							</el-input>
+						</div>
+					</div>
+
 					<div class="form-row">
 						<el-form-item label="Category">
 							<el-select
 								v-model="currentTask.categoryId"
 								placeholder="None"
 								clearable
+								:disabled="!!currentTask.parentTaskId"
 							>
 								<el-option
 									v-for="c in categories"
@@ -971,5 +1084,84 @@ body {
 .task-note {
 	font-size: 0.75rem;
 	color: var(--el-color-warning);
+}
+.parent-nav {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 0.9rem;
+	color: var(--el-color-primary);
+	cursor: pointer;
+	margin-bottom: 15px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.parent-nav:hover {
+	text-decoration: underline;
+}
+
+.subtasks-section {
+	margin-bottom: 20px;
+	border: 1px solid var(--el-border-color-lighter);
+	border-radius: 4px;
+	padding: 10px;
+	background-color: var(--el-fill-color-lighter);
+}
+
+.subtasks-header {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--el-text-color-secondary);
+	margin-bottom: 8px;
+}
+
+.subtask-list {
+	margin-bottom: 8px;
+}
+
+.subtask-item {
+	display: flex;
+	align-items: center;
+	padding: 4px 0;
+	font-size: 0.9rem;
+}
+
+.subtask-title {
+	flex: 1;
+	margin-left: 8px;
+	color: var(--el-text-color-primary);
+}
+
+.subtask-title.clickable {
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-right: 5px;
+}
+
+.subtask-title.clickable:hover {
+	color: var(--el-color-primary);
+}
+
+.subtask-title.is-completed {
+	text-decoration: line-through;
+	color: var(--el-text-color-disabled);
+}
+
+.arrow-icon {
+	font-size: 0.8em;
+	opacity: 0.5;
+}
+
+.subtask-input-row {
+	margin-top: 5px;
+}
+
+.custom-checkbox.checked {
+	background-color: var(--el-color-primary);
+	border-color: var(--el-color-primary);
+	color: white;
 }
 </style>

@@ -41,8 +41,8 @@ export async function createTask(task: Partial<TaskAddParams>): Promise<TaskJSON
 		deadline: task.deadline ?? undefined,
 		estimateDurationHour: task.estimateDurationHour ?? 0,
 		priority: task.priority ?? undefined,
-		//tagIds: task.tagIds ?? [1],
-		// parentTaskId: task.parentTaskId ?? undefined,
+		tagIds: task.tagIds ?? [1],
+		parentTaskId: task.parentTaskId ?? undefined,
 	};
 	console.log('type: ' + typeof params);
 	const result = await window.electron.ipcRenderer.invoke('tasks:add', params);
@@ -55,10 +55,11 @@ export async function updateTask(
 ): Promise<TaskJSON> {
 	const params = JSON.parse(JSON.stringify(data));
 	console.log('Updating task with params:', params);
-	return await window.electron.ipcRenderer.invoke('tasks:update', {
+	const result = await window.electron.ipcRenderer.invoke('tasks:update', {
 		...id,
 		data: params,
 	});
+	return unwrapResult(result);
 }
 
 export async function removeTask(id: TaskIdParam): Promise<void> {
