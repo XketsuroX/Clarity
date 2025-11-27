@@ -1,6 +1,7 @@
 import { TaskJSON, TaskAddParams, TaskUpdateParams, TaskIdParam } from '../../shared/TaskTypes';
 import { CategoryJSON, CategoryCreateParam, CategoryUpdateParam } from '../../shared/CategoryTypes';
 import { TagCreateParam, TagIdParam, TagJSON, TagUpdateParam } from '../../shared/TagTypes';
+import { ScheduleGenerateParams } from 'src/shared/SchedulerTypes';
 
 export function unwrapResult<T>(res: unknown): T {
 	// If preload provided an unwrap helper, delegate to it
@@ -91,8 +92,8 @@ export async function toggleTaskComplete(id: TaskIdParam): Promise<TaskJSON> {
 	return unwrapResult(result);
 }
 
-export async function generateSchedule(hours: number): Promise<any[]> {
-	const result = await window.electron.ipcRenderer.invoke('schedule:generate', hours);
+export async function generateSchedule(params: ScheduleGenerateParams): Promise<any[]> {
+	const result = await window.electron.ipcRenderer.invoke('schedule:generate', params);
 	return unwrapResult(result);
 }
 

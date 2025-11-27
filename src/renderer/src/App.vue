@@ -40,8 +40,8 @@ import {
 	CategoryJSON,
 	CategoryUpdateParam,
 } from '../../shared/CategoryTypes';
-import { TagJSON, TagCreateParam, TagUpdateParam } from '../../shared/TagTypes';
-import { ScheduleGenerateParams } from 'src/shared/SchedulerTypes';
+import { TagJSON, TagCreateParam, TagUpdateParam, TagIdParam } from '../../shared/TagTypes';
+import { ScheduleGenerateParams, ScheduleItem } from 'src/shared/SchedulerTypes';
 
 // --- State ---
 const tasks = ref<TaskJSON[]>([]);
@@ -52,7 +52,7 @@ const showCreateModal = ref(false);
 const showScheduleModal = ref(false);
 const showManageModal = ref(false);
 const showTaskDetailModal = ref(false);
-const currentTask = ref<Task | null>(null);
+const currentTask = ref<TaskJSON | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null); // 用於編輯分類
 const editingTag = ref<TagUpdateParam | null>(null);
 const newSubtaskTitle = ref('');
@@ -112,10 +112,10 @@ const parentTask = computed(() => {
 });
 
 const scheduleConfig = ref({ hours: 4 });
-const scheduleResult = ref<any[]>([]);
+const scheduleResult = ref<ScheduleItem[]>([]);
 
 // --- Helpers ---
-const getCategoryName = (id?: number) => {
+const getCategoryName = (id?: number): string | null => {
 	if (!id) return null;
 	const cat = categories.value.find((c) => c.id === id);
 	return cat ? cat.title : null;
@@ -193,7 +193,7 @@ const startTagEdit = (tag: TagJSON): void => {
 	};
 };
 
-const handleUpdateTagEntry = async () => {
+const handleUpdateTagEntry = async (): Promise<void> => {
 	if (!editingTag.value || !editingTag.value.name?.trim()) {
 		ElMessage.warning('Tag name cannot be empty');
 		return;
@@ -208,7 +208,7 @@ const handleUpdateTagEntry = async () => {
 	ElMessage.success('Tag updated');
 };
 
-const handleDeleteTagEntry = async (id: number) => {
+const handleDeleteTagEntry = async (id: number): Promise<void> => {
 	const payload: TagIdParam = { id };
 	await ElMessageBox.confirm('Delete this tag? It will be removed from all tasks.', 'Warning', {
 		type: 'warning',
@@ -222,18 +222,18 @@ const handleDeleteTagEntry = async (id: number) => {
 	ElMessage.success('Tag deleted');
 };
 
-const handleToggleComplete = async (task: TaskJSON) => {
+const handleToggleComplete = async (task: TaskJSON): Promise<void> => {
 	try {
 		const updated = await toggleTaskComplete({ taskId: task.id });
 		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
 		ElMessage.success(updated.completed ? 'Task completed' : 'Task reopened');
 	} catch (err) {
-		ElMessage.error('Update failed');
+		ElMessage.error('Update failed: ' + err);
 	}
 };
 
 // --- Actions: Category Management ---
-const handleCreateCategory = async () => {
+const handleCreateCategory = async (): Promise<void> => {
 	if (!newCategoryTitle.value.trim()) return;
 	const payload: CategoryCreateParam = { title: newCategoryTitle.value.trim() };
 	const created = await createCategory(payload);
@@ -242,7 +242,7 @@ const handleCreateCategory = async () => {
 	ElMessage.success('Category added');
 };
 
-const handleUpdateCategory = async (id: number, title: string) => {
+const handleUpdateCategory = async (id: number, title: string): Promise<void> => {
 	if (!title.trim()) {
 		ElMessage.warning('Category title cannot be empty');
 		return;
@@ -254,7 +254,7 @@ const handleUpdateCategory = async (id: number, title: string) => {
 	ElMessage.success('Category updated');
 };
 
-const handleDeleteCategory = async (id: number) => {
+const handleDeleteCategory = async (id: number): Promise<void> => {
 	const payload: CategoryIdParam = { id };
 	await ElMessageBox.confirm(
 		'Delete this category? Tasks will become uncategorized.',
@@ -272,13 +272,13 @@ const handleDeleteCategory = async (id: number) => {
 };
 
 // --- Actions: Task Detail & Operations ---
-const openTaskDetail = (task: Task) => {
+const openTaskDetail = (task: TaskJSON): void => {
 	// 深拷貝一份資料，避免直接修改列表中的顯示
 	currentTask.value = JSON.parse(JSON.stringify(task));
 	showTaskDetailModal.value = true;
 };
 
-const handleSaveTaskDetail = async () => {
+const handleSaveTaskDetail = async (): Promise<void> => {
 	if (!currentTask.value) return;
 	try {
 		const updatePayload: TaskUpdateParams = {
@@ -308,7 +308,7 @@ const handleSaveTaskDetail = async () => {
 	}
 };
 
-const handleTaskDelete = async () => {
+const handleTaskDelete = async (): Promise<void> => {
 	if (!currentTask.value) return;
 	try {
 		await ElMessageBox.confirm('Are you sure to delete this task?', 'Warning', {
@@ -325,7 +325,7 @@ const handleTaskDelete = async () => {
 	}
 };
 
-const handleToggleStart = async () => {
+const handleToggleStart = async (): Promise<void> => {
 	if (!currentTask.value) return;
 	try {
 		const updated = await toggleTaskStart({ taskId: currentTask.value.id });
@@ -333,11 +333,11 @@ const handleToggleStart = async () => {
 		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
 		ElMessage.success(updated.state === 'In Progress' ? 'Task started' : 'Task paused');
 	} catch (err) {
-		ElMessage.error('Failed to toggle start');
+		ElMessage.error('Failed to toggle start: ' + err);
 	}
 };
 
-const runSchedule = async () => {
+const runSchedule = async (): Promise<void> => {
 	try {
 		const params: ScheduleGenerateParams = {
 			capacityHours: scheduleConfig.value.hours,
@@ -350,7 +350,7 @@ const runSchedule = async () => {
 	}
 };
 
-const handleAddSubtask = async () => {
+const handleAddSubtask = async (): Promise<void> => {
 	if (!newSubtaskTitle.value.trim() || !currentTask.value) return;
 
 	try {
@@ -369,27 +369,27 @@ const handleAddSubtask = async () => {
 		newSubtaskTitle.value = '';
 		ElMessage.success('Subtask added');
 	} catch (err) {
-		ElMessage.error('Failed to add subtask');
+		ElMessage.error('Failed to add subtask: ' + err);
 	}
 };
 
-const openSubtaskDetail = (subtask: TaskJSON) => {
+const openSubtaskDetail = (subtask: TaskJSON): void => {
 	currentTask.value = JSON.parse(JSON.stringify(subtask));
 };
 
-const backToParentTask = () => {
+const backToParentTask = (): void => {
 	if (parentTask.value) {
 		currentTask.value = JSON.parse(JSON.stringify(parentTask.value));
 	}
 };
 
-const handleTaskDeleteWrapper = async (taskToDelete: TaskJSON) => {
+const handleTaskDeleteWrapper = async (taskToDelete: TaskJSON): Promise<void> => {
 	try {
 		await removeTask({ taskId: taskToDelete.id });
 		tasks.value = tasks.value.filter((t) => t.id !== taskToDelete.id);
 		ElMessage.success('Subtask deleted');
 	} catch (err) {
-		ElMessage.error('Failed to delete subtask');
+		ElMessage.error('Failed to delete subtask: ' + err);
 	}
 };
 
@@ -690,7 +690,7 @@ onMounted(() => {
 					<div class="subtasks-section">
 						<div class="subtasks-header">Subtasks</div>
 
-						<div class="subtask-list" v-if="currentSubtasks.length > 0">
+						<div v-if="currentSubtasks.length > 0" class="subtask-list">
 							<div v-for="sub in currentSubtasks" :key="sub.id" class="subtask-item">
 								<div class="task-check" @click.stop="handleToggleComplete(sub)">
 									<div
