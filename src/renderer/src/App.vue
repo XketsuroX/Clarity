@@ -41,6 +41,7 @@ import {
 	CategoryUpdateParam,
 } from '../../shared/CategoryTypes';
 import { TagJSON, TagCreateParam, TagUpdateParam } from '../../shared/TagTypes';
+import { ScheduleGenerateParams } from 'src/shared/SchedulerTypes';
 
 // --- State ---
 const tasks = ref<TaskJSON[]>([]);
@@ -338,7 +339,11 @@ const handleToggleStart = async () => {
 
 const runSchedule = async () => {
 	try {
-		scheduleResult.value = await generateSchedule(scheduleConfig.value.hours);
+		const params: ScheduleGenerateParams = {
+			capacityHours: scheduleConfig.value.hours,
+			timeUnit: 0.5,
+		};
+		scheduleResult.value = await generateSchedule(params);
 		ElMessage.success(`Found ${scheduleResult.value.length} tasks`);
 	} catch (err) {
 		ElMessage.error('Scheduling failed: ' + err);
@@ -410,7 +415,7 @@ onMounted(() => {
 		</header>
 
 		<!-- Content -->
-		<main class="task-list-container" v-loading="loading">
+		<main v-loading="loading" class="task-list-container">
 			<div v-if="tasks.length === 0" class="empty-state">No tasks yet. Stay clear.</div>
 
 			<!-- 使用 Element Plus Collapse 模擬文件夾效果 -->
@@ -746,7 +751,7 @@ onMounted(() => {
 						</el-form-item>
 					</div>
 
-					<el-form-item label="Tags" v-if="currentTask">
+					<el-form-item v-if="currentTask" label="Tags">
 						<el-select
 							v-model="currentTask.tagIds"
 							multiple
