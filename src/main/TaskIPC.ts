@@ -40,9 +40,12 @@ export function registerTaskIpcHandlers(): void {
 		return await taskManager.startTask(params.taskId);
 	});
 
-	ipcMain.handle('tasks:setCompleteness', async (_, params: TaskIdParam & { completeness: number }) => {
-		return await taskManager.setTaskCompleteness(params.taskId, params.completeness);
-	});
+	ipcMain.handle(
+		'tasks:setCompleteness',
+		async (_, params: TaskIdParam & { completeness: number }) => {
+			return await taskManager.setTaskCompleteness(params.taskId, params.completeness);
+		}
+	);
 	// 刪除任務
 	ipcMain.handle('tasks:remove', async (_, params: TaskIdParam) => {
 		return await taskManager.removeTask(params.taskId);
@@ -82,7 +85,7 @@ export function registerTaskIpcHandlers(): void {
 	ipcMain.handle('tasks:getAverageActualVsEstimated', async () => {
 		return await taskManager.getAverageActualVsEstimated();
 	});
-  
+
 	// 取得任務的預估剩餘工時
 	ipcMain.handle('tasks:getEstimatedDuration', async (_, params: TaskIdParam) => {
 		return await taskManager.getEstimatedTaskDuration(params.taskId);
