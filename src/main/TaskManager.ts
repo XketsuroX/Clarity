@@ -292,12 +292,14 @@ export class TaskManager {
 	 * Get urgency for a single task (0..100). Proxy to TaskCalculator.
 	 */
 	async getTaskUrgency(taskId: number, windowDays = 30): Promise<Result<number>> {
+		await this.refreshOverdue();
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.calculator.getTaskUrgency(taskId, windowDays);
 		}, 'Task not found');
 	}
 
 	async getPendingTasks(): Promise<Result<Task[]>> {
+		await this.refreshOverdue();
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.taskRepository.getPendingTasks();
 		}, 'No pending tasks');
