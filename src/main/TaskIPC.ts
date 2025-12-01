@@ -52,13 +52,13 @@ export function registerTaskIpcHandlers(): void {
 	});
 
 	// 獲取任務的所有後代
-	ipcMain.handle('tasks:getAllDescendants', async (_, params: TaskIdParam) => {
-		return await taskManager.getTaskDescendants(params.taskId);
+	ipcMain.handle('tasks:getSubTask', async (_, params: TaskIdParam) => {
+		return await taskManager.getSubTask(params.taskId);
 	});
 
 	// 獲取任務的所有祖先
-	ipcMain.handle('tasks:getAllAncestors', async (_, params: TaskIdParam) => {
-		return await taskManager.getTaskAncestors(params.taskId);
+	ipcMain.handle('tasks:getUpcomingTask', async (_, params: TaskIdParam) => {
+		return await taskManager.getUpcomingTask(params.taskId);
 	});
 
 	// 計算任務的完成度
@@ -89,5 +89,9 @@ export function registerTaskIpcHandlers(): void {
 	// 取得任務的預估剩餘工時
 	ipcMain.handle('tasks:getEstimatedDuration', async (_, params: TaskIdParam) => {
 		return await taskManager.getEstimatedTaskDuration(params.taskId);
+	});
+
+	ipcMain.handle('tasks:getHeadTasks', async () => {
+		return await taskManager.getRootTasks();
 	});
 }

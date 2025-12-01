@@ -348,7 +348,7 @@ export class TaskManager {
 	/**
 	 * Get all descendants for a task. Proxy to TaskDependencyManager.
 	 */
-	async getTaskDescendants(taskId: number): Promise<Result<ITaskJSON[]>> {
+	async getSubTask(taskId: number): Promise<Result<ITaskJSON[]>> {
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.dependencyManager.getAllDescendants(taskId);
 		}, 'Task not found');
@@ -357,7 +357,7 @@ export class TaskManager {
 	/**
 	 * Get all ancestors for a task. Proxy to TaskDependencyManager.
 	 */
-	async getTaskAncestors(taskId: number): Promise<Result<number[]>> {
+	async getUpcomingTask(taskId: number): Promise<Result<number[]>> {
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.dependencyManager.getAllAncestors(taskId);
 		}, 'Task not found');
