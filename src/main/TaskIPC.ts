@@ -191,7 +191,7 @@ export function registerTaskIpcHandlers(): void {
 	 * ```
 	 */
 	ipcMain.handle('tasks:getAllDescendants', async (_, params: TaskIdParam) => {
-		return await taskManager.getTaskDescendants(params.taskId);
+		return await taskManager.getSubTask(params.taskId);
 	});
 
 	/**
@@ -207,7 +207,7 @@ export function registerTaskIpcHandlers(): void {
 	 * ```
 	 */
 	ipcMain.handle('tasks:getAllAncestors', async (_, params: TaskIdParam) => {
-		return await taskManager.getTaskAncestors(params.taskId);
+		return await taskManager.getUpcomingTask(params.taskId);
 	});
 
 	/**
@@ -325,5 +325,9 @@ export function registerTaskIpcHandlers(): void {
 	 */
 	ipcMain.handle('tasks:getEstimatedDuration', async (_, params: TaskIdParam) => {
 		return await taskManager.getEstimatedTaskDuration(params.taskId);
+	});
+
+	ipcMain.handle('tasks:getHeadTasks', async () => {
+		return await taskManager.getRootTasks();
 	});
 }

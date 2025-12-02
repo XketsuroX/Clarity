@@ -13,6 +13,8 @@ import {
 	Edit,
 	VideoPlay,
 	VideoPause,
+	ArrowRight,
+	Back,
 } from '@element-plus/icons-vue';
 import {
 	fetchTasks,
@@ -38,7 +40,8 @@ import {
 	CategoryJSON,
 	CategoryUpdateParam,
 } from '../../shared/CategoryTypes';
-import { TagJSON, TagCreateParam } from '../../shared/TagTypes';
+import { TagJSON, TagCreateParam, TagUpdateParam, TagIdParam } from '../../shared/TagTypes';
+import { ScheduleGenerateParams, ScheduleItem } from 'src/shared/SchedulerTypes';
 
 // --- State ---
 const tasks = ref<TaskJSON[]>([]);
@@ -49,10 +52,10 @@ const showCreateModal = ref(false);
 const showScheduleModal = ref(false);
 const showManageModal = ref(false);
 const showTaskDetailModal = ref(false);
-const currentTask = ref<Task | null>(null);
+const currentTask = ref<TaskJSON | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null); // 用於編輯分類
 const editingTag = ref<TagUpdateParam | null>(null);
-
+const newSubtaskTitle = ref('');
 // Form Data
 const newTask = ref<TaskAddParams>({
 	title: '',
@@ -72,9 +75,11 @@ const activeCollapseItems = ref<(string | number)[]>(['uncategorized']);
 const groupedTasks = computed(() => {
 	const groups: { id: number | string; title: string; tasks: TaskJSON[] }[] = [];
 
+	const rootTasks = tasks.value.filter((t) => !t.parentTaskId);
+
 	// 1. 處理已分類的任務
 	categories.value.forEach((cat) => {
-		const catTasks = tasks.value.filter((t) => t.categoryId === cat.id);
+		const catTasks = rootTasks.filter((t) => t.categoryId === cat.id);
 		// 即使分類是空的也顯示，這樣才有「文件夾」的感覺
 		groups.push({
 			id: cat.id,
@@ -84,7 +89,7 @@ const groupedTasks = computed(() => {
 	});
 
 	// 2. 處理未分類 (Uncategorized)
-	const noCatTasks = tasks.value.filter((t) => !t.categoryId);
+	const noCatTasks = rootTasks.filter((t) => !t.categoryId);
 	if (noCatTasks.length > 0) {
 		groups.push({
 			id: 'uncategorized',
@@ -96,11 +101,21 @@ const groupedTasks = computed(() => {
 	return groups;
 });
 
+const currentSubtasks = computed(() => {
+	if (!currentTask.value) return [];
+	return tasks.value.filter((t) => t.parentTaskId === currentTask.value?.id);
+});
+
+const parentTask = computed(() => {
+	if (!currentTask.value?.parentTaskId) return null;
+	return tasks.value.find((t) => t.id === currentTask.value?.parentTaskId);
+});
+
 const scheduleConfig = ref({ hours: 4 });
-const scheduleResult = ref<any[]>([]);
+const scheduleResult = ref<ScheduleItem[]>([]);
 
 // --- Helpers ---
-const getCategoryName = (id?: number) => {
+const getCategoryName = (id?: number): string | null => {
 	if (!id) return null;
 	const cat = categories.value.find((c) => c.id === id);
 	return cat ? cat.title : null;
@@ -178,7 +193,7 @@ const startTagEdit = (tag: TagJSON): void => {
 	};
 };
 
-const handleUpdateTagEntry = async () => {
+const handleUpdateTagEntry = async (): Promise<void> => {
 	if (!editingTag.value || !editingTag.value.name?.trim()) {
 		ElMessage.warning('Tag name cannot be empty');
 		return;
@@ -193,7 +208,7 @@ const handleUpdateTagEntry = async () => {
 	ElMessage.success('Tag updated');
 };
 
-const handleDeleteTagEntry = async (id: number) => {
+const handleDeleteTagEntry = async (id: number): Promise<void> => {
 	const payload: TagIdParam = { id };
 	await ElMessageBox.confirm('Delete this tag? It will be removed from all tasks.', 'Warning', {
 		type: 'warning',
@@ -207,18 +222,18 @@ const handleDeleteTagEntry = async (id: number) => {
 	ElMessage.success('Tag deleted');
 };
 
-const handleToggleComplete = async (task: TaskJSON) => {
+const handleToggleComplete = async (task: TaskJSON): Promise<void> => {
 	try {
 		const updated = await toggleTaskComplete({ taskId: task.id });
 		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
 		ElMessage.success(updated.completed ? 'Task completed' : 'Task reopened');
 	} catch (err) {
-		ElMessage.error('Update failed');
+		ElMessage.error('Update failed: ' + err);
 	}
 };
 
 // --- Actions: Category Management ---
-const handleCreateCategory = async () => {
+const handleCreateCategory = async (): Promise<void> => {
 	if (!newCategoryTitle.value.trim()) return;
 	const payload: CategoryCreateParam = { title: newCategoryTitle.value.trim() };
 	const created = await createCategory(payload);
@@ -227,7 +242,7 @@ const handleCreateCategory = async () => {
 	ElMessage.success('Category added');
 };
 
-const handleUpdateCategory = async (id: number, title: string) => {
+const handleUpdateCategory = async (id: number, title: string): Promise<void> => {
 	if (!title.trim()) {
 		ElMessage.warning('Category title cannot be empty');
 		return;
@@ -239,7 +254,7 @@ const handleUpdateCategory = async (id: number, title: string) => {
 	ElMessage.success('Category updated');
 };
 
-const handleDeleteCategory = async (id: number) => {
+const handleDeleteCategory = async (id: number): Promise<void> => {
 	const payload: CategoryIdParam = { id };
 	await ElMessageBox.confirm(
 		'Delete this category? Tasks will become uncategorized.',
@@ -257,13 +272,13 @@ const handleDeleteCategory = async (id: number) => {
 };
 
 // --- Actions: Task Detail & Operations ---
-const openTaskDetail = (task: Task) => {
+const openTaskDetail = (task: TaskJSON): void => {
 	// 深拷貝一份資料，避免直接修改列表中的顯示
 	currentTask.value = JSON.parse(JSON.stringify(task));
 	showTaskDetailModal.value = true;
 };
 
-const handleSaveTaskDetail = async () => {
+const handleSaveTaskDetail = async (): Promise<void> => {
 	if (!currentTask.value) return;
 	try {
 		const updatePayload: TaskUpdateParams = {
@@ -276,6 +291,8 @@ const handleSaveTaskDetail = async () => {
 			priority: currentTask.value.priority,
 			categoryId: currentTask.value.categoryId ?? null,
 			tagIds: currentTask.value.tagIds ?? [],
+
+			parentTaskId: currentTask.value.parentTaskId ?? null,
 		};
 
 		const updated = await updateTask({ taskId: currentTask.value.id }, updatePayload);
@@ -291,7 +308,7 @@ const handleSaveTaskDetail = async () => {
 	}
 };
 
-const handleTaskDelete = async () => {
+const handleTaskDelete = async (): Promise<void> => {
 	if (!currentTask.value) return;
 	try {
 		await ElMessageBox.confirm('Are you sure to delete this task?', 'Warning', {
@@ -308,7 +325,7 @@ const handleTaskDelete = async () => {
 	}
 };
 
-const handleToggleStart = async () => {
+const handleToggleStart = async (): Promise<void> => {
 	if (!currentTask.value) return;
 	try {
 		const updated = await toggleTaskStart({ taskId: currentTask.value.id });
@@ -316,16 +333,63 @@ const handleToggleStart = async () => {
 		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
 		ElMessage.success(updated.state === 'In Progress' ? 'Task started' : 'Task paused');
 	} catch (err) {
-		ElMessage.error('Failed to toggle start');
+		ElMessage.error('Failed to toggle start: ' + err);
 	}
 };
 
-const runSchedule = async () => {
+const runSchedule = async (): Promise<void> => {
 	try {
-		scheduleResult.value = await generateSchedule(scheduleConfig.value.hours);
+		const params: ScheduleGenerateParams = {
+			capacityHours: scheduleConfig.value.hours,
+			timeUnit: 0.5,
+		};
+		scheduleResult.value = await generateSchedule(params);
 		ElMessage.success(`Found ${scheduleResult.value.length} tasks`);
 	} catch (err) {
 		ElMessage.error('Scheduling failed: ' + err);
+	}
+};
+
+const handleAddSubtask = async (): Promise<void> => {
+	if (!newSubtaskTitle.value.trim() || !currentTask.value) return;
+
+	try {
+		const payload: TaskAddParams = {
+			title: newSubtaskTitle.value.trim(),
+			estimateDurationHour: 0.5,
+			priority: 0,
+			// 強制繼承父任務的分類
+			categoryId: currentTask.value.categoryId ?? undefined,
+			tagIds: [],
+			parentTaskId: currentTask.value.id, // 設定父任務 ID
+		};
+
+		const created = await createTask(payload);
+		tasks.value = [...tasks.value, created];
+		newSubtaskTitle.value = '';
+		ElMessage.success('Subtask added');
+	} catch (err) {
+		ElMessage.error('Failed to add subtask: ' + err);
+	}
+};
+
+const openSubtaskDetail = (subtask: TaskJSON): void => {
+	currentTask.value = JSON.parse(JSON.stringify(subtask));
+};
+
+const backToParentTask = (): void => {
+	if (parentTask.value) {
+		currentTask.value = JSON.parse(JSON.stringify(parentTask.value));
+	}
+};
+
+const handleTaskDeleteWrapper = async (taskToDelete: TaskJSON): Promise<void> => {
+	try {
+		await removeTask({ taskId: taskToDelete.id });
+		tasks.value = tasks.value.filter((t) => t.id !== taskToDelete.id);
+		ElMessage.success('Subtask deleted');
+	} catch (err) {
+		ElMessage.error('Failed to delete subtask: ' + err);
 	}
 };
 
@@ -351,7 +415,7 @@ onMounted(() => {
 		</header>
 
 		<!-- Content -->
-		<main class="task-list-container" v-loading="loading">
+		<main v-loading="loading" class="task-list-container">
 			<div v-if="tasks.length === 0" class="empty-state">No tasks yet. Stay clear.</div>
 
 			<!-- 使用 Element Plus Collapse 模擬文件夾效果 -->
@@ -442,6 +506,15 @@ onMounted(() => {
 								:label="c.title"
 								:value="c.id"
 							/>
+						</el-select>
+					</el-form-item>
+
+					<el-form-item label="Priority">
+						<el-select v-model="newTask.priority" style="width: 100%">
+							<el-option label="Low" :value="0" />
+							<el-option label="Medium" :value="1" />
+							<el-option label="High" :value="2" />
+							<el-option label="Urgent" :value="3" />
 						</el-select>
 					</el-form-item>
 
@@ -595,6 +668,11 @@ onMounted(() => {
 			destroy-on-close
 		>
 			<div v-if="currentTask" class="detail-container">
+				<div v-if="parentTask" class="parent-nav" @click="backToParentTask">
+					<el-icon><Back /></el-icon>
+					<span>Parent: {{ parentTask.title }}</span>
+				</div>
+
 				<el-form label-position="top">
 					<el-form-item label="Title">
 						<el-input v-model="currentTask.title" size="large" />
@@ -609,12 +687,61 @@ onMounted(() => {
 						/>
 					</el-form-item>
 
+					<div class="subtasks-section">
+						<div class="subtasks-header">Subtasks</div>
+
+						<div v-if="currentSubtasks.length > 0" class="subtask-list">
+							<div v-for="sub in currentSubtasks" :key="sub.id" class="subtask-item">
+								<div class="task-check" @click.stop="handleToggleComplete(sub)">
+									<div
+										class="custom-checkbox"
+										:class="{ checked: sub.completed }"
+									>
+										<el-icon v-if="sub.completed"><Check /></el-icon>
+									</div>
+								</div>
+
+								<!-- 點擊標題進入子任務詳情 -->
+								<span
+									class="subtask-title clickable"
+									:class="{ 'is-completed': sub.completed }"
+									@click="openSubtaskDetail(sub)"
+								>
+									{{ sub.title }}
+									<el-icon class="arrow-icon"><ArrowRight /></el-icon>
+								</span>
+
+								<el-button
+									link
+									type="danger"
+									size="small"
+									:icon="Delete"
+									@click="handleTaskDeleteWrapper(sub)"
+								/>
+							</div>
+						</div>
+
+						<div class="subtask-input-row">
+							<el-input
+								v-model="newSubtaskTitle"
+								placeholder="Add a subtask..."
+								size="small"
+								@keyup.enter="handleAddSubtask"
+							>
+								<template #append>
+									<el-button :icon="Plus" @click="handleAddSubtask" />
+								</template>
+							</el-input>
+						</div>
+					</div>
+
 					<div class="form-row">
 						<el-form-item label="Category">
 							<el-select
 								v-model="currentTask.categoryId"
 								placeholder="None"
 								clearable
+								:disabled="!!currentTask.parentTaskId"
 							>
 								<el-option
 									v-for="c in categories"
@@ -624,6 +751,16 @@ onMounted(() => {
 								/>
 							</el-select>
 						</el-form-item>
+
+						<el-form-item label="Priority">
+							<el-select v-model="currentTask.priority">
+								<el-option label="Low" :value="0" />
+								<el-option label="Medium" :value="1" />
+								<el-option label="High" :value="2" />
+								<el-option label="Urgent" :value="3" />
+							</el-select>
+						</el-form-item>
+
 						<el-form-item label="Duration (h)">
 							<el-input-number
 								v-model="currentTask.estimateDurationHour"
@@ -633,7 +770,7 @@ onMounted(() => {
 						</el-form-item>
 					</div>
 
-					<el-form-item label="Tags" v-if="currentTask">
+					<el-form-item v-if="currentTask" label="Tags">
 						<el-select
 							v-model="currentTask.tagIds"
 							multiple
@@ -971,5 +1108,84 @@ body {
 .task-note {
 	font-size: 0.75rem;
 	color: var(--el-color-warning);
+}
+.parent-nav {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 0.9rem;
+	color: var(--el-color-primary);
+	cursor: pointer;
+	margin-bottom: 15px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.parent-nav:hover {
+	text-decoration: underline;
+}
+
+.subtasks-section {
+	margin-bottom: 20px;
+	border: 1px solid var(--el-border-color-lighter);
+	border-radius: 4px;
+	padding: 10px;
+	background-color: var(--el-fill-color-lighter);
+}
+
+.subtasks-header {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--el-text-color-secondary);
+	margin-bottom: 8px;
+}
+
+.subtask-list {
+	margin-bottom: 8px;
+}
+
+.subtask-item {
+	display: flex;
+	align-items: center;
+	padding: 4px 0;
+	font-size: 0.9rem;
+}
+
+.subtask-title {
+	flex: 1;
+	margin-left: 8px;
+	color: var(--el-text-color-primary);
+}
+
+.subtask-title.clickable {
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-right: 5px;
+}
+
+.subtask-title.clickable:hover {
+	color: var(--el-color-primary);
+}
+
+.subtask-title.is-completed {
+	text-decoration: line-through;
+	color: var(--el-text-color-disabled);
+}
+
+.arrow-icon {
+	font-size: 0.8em;
+	opacity: 0.5;
+}
+
+.subtask-input-row {
+	margin-top: 5px;
+}
+
+.custom-checkbox.checked {
+	background-color: var(--el-color-primary);
+	border-color: var(--el-color-primary);
+	color: white;
 }
 </style>

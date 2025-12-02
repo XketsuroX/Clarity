@@ -12,6 +12,10 @@ export interface TaskJSON {
 	tagIds?: number[];
 	createdAt?: string;
 	updatedAt?: string;
+	childrenTaskIds: number[];
+	parentTaskId?: number | null;
+	state: string;
+	isSplittable: boolean;
 }
 
 // 參數型別

@@ -1,6 +1,7 @@
 import { TaskJSON, TaskAddParams, TaskUpdateParams, TaskIdParam } from '../../shared/TaskTypes';
 import { CategoryJSON, CategoryCreateParam, CategoryUpdateParam } from '../../shared/CategoryTypes';
 import { TagCreateParam, TagIdParam, TagJSON, TagUpdateParam } from '../../shared/TagTypes';
+import { ScheduleGenerateParams } from 'src/shared/SchedulerTypes';
 
 export function unwrapResult<T>(res: unknown): T {
 	// If preload provided an unwrap helper, delegate to it
@@ -34,17 +35,32 @@ export async function fetchTasks(): Promise<TaskJSON[]> {
 }
 
 export async function createTask(task: Partial<TaskAddParams>): Promise<TaskJSON> {
-	const params: TaskAddParams = {
-		title: task.title ?? '',
-		description: task.description,
-		categoryId: task.categoryId ?? undefined,
-		deadline: task.deadline ?? undefined,
-		estimateDurationHour: task.estimateDurationHour ?? 0,
-		priority: task.priority ?? undefined,
-		//tagIds: task.tagIds ?? [1],
-		// parentTaskId: task.parentTaskId ?? undefined,
+	// const params: TaskAddParams = {
+	// 	title: task.title ?? '',
+	// 	description: task.description,
+	// 	categoryId: task.categoryId ?? undefined,
+	// 	deadline: task.deadline ?? undefined,
+	// 	estimateDurationHour: task.estimateDurationHour ?? 0,
+	// 	priority: task.priority ?? undefined,
+	// 	tagIds: task.tagIds ?? [1],
+	// 	parentTaskId: task.parentTaskId ?? undefined,
+	// };
+
+	const defaults: Partial<TaskAddParams> = {
+		title: '',
+		estimateDurationHour: 0,
+		tagIds: [], // 建議預設為空陣列，除非你確定要預設 tagId 1
+		priority: 0,
 	};
-	console.log('type: ' + typeof params);
+
+	const cleanInput = JSON.parse(JSON.stringify(task));
+
+	// 3. 合併：預設值 < 輸入值
+	const params: TaskAddParams = {
+		...defaults,
+		...cleanInput,
+	};
+	console.log('param: ' + JSON.stringify(params));
 	const result = await window.electron.ipcRenderer.invoke('tasks:add', params);
 	return unwrapResult(result);
 }
@@ -55,10 +71,11 @@ export async function updateTask(
 ): Promise<TaskJSON> {
 	const params = JSON.parse(JSON.stringify(data));
 	console.log('Updating task with params:', params);
-	return await window.electron.ipcRenderer.invoke('tasks:update', {
+	const result = await window.electron.ipcRenderer.invoke('tasks:update', {
 		...id,
 		data: params,
 	});
+	return unwrapResult(result);
 }
 
 export async function removeTask(id: TaskIdParam): Promise<void> {
@@ -75,8 +92,8 @@ export async function toggleTaskComplete(id: TaskIdParam): Promise<TaskJSON> {
 	return unwrapResult(result);
 }
 
-export async function generateSchedule(hours: number): Promise<any[]> {
-	const result = await window.electron.ipcRenderer.invoke('schedule:generate', hours);
+export async function generateSchedule(params: ScheduleGenerateParams): Promise<any[]> {
+	const result = await window.electron.ipcRenderer.invoke('schedule:generate', params);
 	return unwrapResult(result);
 }
 

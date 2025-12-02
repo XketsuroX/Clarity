@@ -99,7 +99,7 @@ export class TaskManager {
 		for (const id of idsToUpdate) {
 			const full = await this.taskRepository.findById(id);
 			if (!full) continue;
-			const hasChildren = full.childrenTasks.length > 0;   
+			const hasChildren = full.childrenTasks.length > 0;
 			if (!hasChildren) continue; // skip leaves; they are user-editable
 			try {
 				const c = await this.calculator.getTaskCompleteness(full.id);
@@ -317,12 +317,14 @@ export class TaskManager {
 	/**
 	 * Get actual vs estimated duration comparison. Proxy to TaskCalculator.
 	 */
-	async getActualVsEstimated(taskId: number): Promise<Result<{
-		estimatedDurationHour: number | null;
-		actualDurationHour: number | null;
-		deltaHour: number | null;
-		deltaPercent: number | null;
-	}>> {
+	async getActualVsEstimated(taskId: number): Promise<
+		Result<{
+			estimatedDurationHour: number | null;
+			actualDurationHour: number | null;
+			deltaHour: number | null;
+			deltaPercent: number | null;
+		}>
+	> {
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.calculator.getActualVsEstimated(taskId);
 		}, 'Task not found');
@@ -331,11 +333,13 @@ export class TaskManager {
 	/**
 	 * Get average actual vs estimated across all tasks. Proxy to TaskCalculator.
 	 */
-	async getAverageActualVsEstimated(): Promise<Result<{
-		avgDeltaHour: number | null;
-		avgDeltaPercent: number | null;
-		count: number;
-	}>> {
+	async getAverageActualVsEstimated(): Promise<
+		Result<{
+			avgDeltaHour: number | null;
+			avgDeltaPercent: number | null;
+			count: number;
+		}>
+	> {
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.calculator.getAverageActualVsEstimated();
 		}, 'No tasks');
@@ -344,7 +348,7 @@ export class TaskManager {
 	/**
 	 * Get all descendants for a task. Proxy to TaskDependencyManager.
 	 */
-	async getTaskDescendants(taskId: number): Promise<Result<ITaskJSON[]>> {
+	async getSubTask(taskId: number): Promise<Result<ITaskJSON[]>> {
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.dependencyManager.getAllDescendants(taskId);
 		}, 'Task not found');
@@ -353,7 +357,7 @@ export class TaskManager {
 	/**
 	 * Get all ancestors for a task. Proxy to TaskDependencyManager.
 	 */
-	async getTaskAncestors(taskId: number): Promise<Result<number[]>> {
+	async getUpcomingTask(taskId: number): Promise<Result<number[]>> {
 		return this.errorHandler.wrapAsync(async () => {
 			return await this.dependencyManager.getAllAncestors(taskId);
 		}, 'Task not found');
