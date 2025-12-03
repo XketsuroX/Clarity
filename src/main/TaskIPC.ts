@@ -5,11 +5,11 @@ import { CreateTaskData } from './TaskRepository';
 
 /**
  * TaskIPC - Electron IPC handlers for task management operations.
- * 
+ *
  * All handlers return Result<T> objects with the following structure:
  * - Success: { ok: true, value: T }
  * - Error: { ok: false, error: { code: string, message: string, details?: any } }
- * 
+ *
  * Renderer process usage:
  * ```typescript
  * const result = await window.electron.ipcRenderer.invoke('tasks:list');
@@ -26,7 +26,7 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Retrieves all tasks in the system
 	 * Parameters: none
 	 * Returns: Result<ITaskJSON[]> - Array of all tasks with their properties
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:list');
@@ -42,7 +42,7 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Retrieves a single task by its ID
 	 * Parameters: { taskId: number }
 	 * Returns: Result<ITaskJSON> - Task object or null if not found
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:get', { taskId: 1 });
@@ -58,7 +58,7 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Creates a new task
 	 * Parameters: TaskAddParams - { title, description?, deadline?, parentTaskId?, ... }
 	 * Returns: Result<ITaskJSON> - Newly created task object
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:add', {
@@ -83,7 +83,7 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Updates an existing task's properties
 	 * Parameters: { taskId: number, data: TaskUpdateParams }
 	 * Returns: Result<ITaskJSON> - Updated task object
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:update', {
@@ -106,10 +106,10 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Toggles task completion status (complete ↔ incomplete)
 	 * Parameters: { taskId: number }
 	 * Returns: Result<ITaskJSON> - Updated task with new completion state
-	 * 
+	 *
 	 * Note: All child tasks must be completed before a parent can be marked complete.
 	 * Automatically calculates actual duration when marking complete.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:toggleComplete', { taskId: 1 });
@@ -125,9 +125,9 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Starts a task (transitions from "Scheduled" to "In Progress")
 	 * Parameters: { taskId: number }
 	 * Returns: Result<ITaskJSON> - Updated task with actualStartDate set
-	 * 
+	 *
 	 * Note: Only works for tasks in "Scheduled" state.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:toggleStart', { taskId: 1 });
@@ -143,31 +143,34 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Manually sets the completeness percentage for a leaf task (0-100)
 	 * Parameters: { taskId: number, completeness: number }
 	 * Returns: Result<ITaskJSON> - Updated task with new completeness value
-	 * 
+	 *
 	 * Note: Only allowed for leaf tasks (tasks without children).
 	 * Parent tasks have auto-calculated completeness based on children.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
-	 * const result = await invoke('tasks:setCompleteness', { 
-	 *   taskId: 1, 
-	 *   completeness: 75 
+	 * const result = await invoke('tasks:setCompleteness', {
+	 *   taskId: 1,
+	 *   completeness: 75
 	 * });
 	 * // result.value: { id: 1, completeness: 75, ... }
 	 * ```
 	 */
-	ipcMain.handle('tasks:setCompleteness', async (_, params: TaskIdParam & { completeness: number }) => {
-		return await taskManager.setTaskCompleteness(params.taskId, params.completeness);
-	});
+	ipcMain.handle(
+		'tasks:setCompleteness',
+		async (_, params: TaskIdParam & { completeness: number }) => {
+			return await taskManager.setTaskCompleteness(params.taskId, params.completeness);
+		}
+	);
 
 	/**
 	 * Channel: tasks:remove
 	 * Description: Deletes a task and cleans up all parent/child relationships
 	 * Parameters: { taskId: number }
 	 * Returns: Result<boolean> - true if successfully deleted
-	 * 
+	 *
 	 * Note: Automatically updates completeness aggregates for parent tasks.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:remove', { taskId: 1 });
@@ -183,7 +186,7 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Retrieves all child tasks recursively (subtasks, sub-subtasks, etc.)
 	 * Parameters: { taskId: number }
 	 * Returns: Result<ITaskJSON[]> - Array of all descendant tasks
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:getAllDescendants', { taskId: 1 });
@@ -199,7 +202,7 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Retrieves all parent task IDs recursively up to root
 	 * Parameters: { taskId: number }
 	 * Returns: Result<number[]> - Array of ancestor task IDs
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:getAllAncestors', { taskId: 5 });
@@ -215,10 +218,10 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Calculates task completeness percentage (0-100)
 	 * Parameters: { taskId: number }
 	 * Returns: Result<number> - Completeness percentage
-	 * 
+	 *
 	 * Note: For leaf tasks, returns persisted user-set value.
 	 * For parent tasks, aggregates children's completeness.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:getCompleteness', { taskId: 1 });
@@ -234,10 +237,10 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Calculates task urgency score (0-100) based on deadline proximity and duration
 	 * Parameters: { taskId: number }
 	 * Returns: Result<number> - Urgency score (100 = most urgent)
-	 * 
+	 *
 	 * Note: Considers deadline, estimated duration, and current date.
 	 * Higher score = more urgent / closer to deadline.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:getUrgency', { taskId: 1 });
@@ -253,10 +256,10 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Batch updates all tasks past their deadline to "Overdue" state
 	 * Parameters: none
 	 * Returns: Promise<void>
-	 * 
+	 *
 	 * Note: Should be called periodically (e.g., on app start, daily).
 	 * Makes overdue status queryable in database.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * await invoke('tasks:refreshOverdue');
@@ -271,7 +274,7 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Compares actual vs estimated duration for a completed task
 	 * Parameters: { taskId: number }
 	 * Returns: Result<{ estimatedDurationHour, actualDurationHour, deltaHour, deltaPercent }>
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:getActualVsEstimated', { taskId: 1 });
@@ -292,9 +295,9 @@ export function registerTaskIpcHandlers(): void {
 	 * Description: Calculates average estimation accuracy across all completed tasks
 	 * Parameters: none
 	 * Returns: Result<{ avgDeltaHour, avgDeltaPercent, count }>
-	 * 
+	 *
 	 * Note: Useful for improving future estimations and tracking team performance.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:getAverageActualVsEstimated');
@@ -308,15 +311,15 @@ export function registerTaskIpcHandlers(): void {
 	ipcMain.handle('tasks:getAverageActualVsEstimated', async () => {
 		return await taskManager.getAverageActualVsEstimated();
 	});
-  
+
 	/**
 	 * Channel: tasks:getEstimatedDuration
 	 * Description: Calculates remaining estimated duration for a task (includes subtasks)
 	 * Parameters: { taskId: number }
 	 * Returns: Result<number> - Estimated remaining hours
-	 * 
+	 *
 	 * Note: Aggregates estimated duration for task and all incomplete descendants.
-	 * 
+	 *
 	 * Example:
 	 * ```typescript
 	 * const result = await invoke('tasks:getEstimatedDuration', { taskId: 1 });
