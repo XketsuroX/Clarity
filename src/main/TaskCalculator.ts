@@ -28,10 +28,10 @@ export class TaskCalculator {
 	}
 
 	/**
-	 * Compute completeness for a single task and return a percentage 0..100 using the formula:
-	 * percent = ((sum(children durations where state is In Progress or Scheduled) + task duration) /
-	 * (sum(children durations where state != Overdue) + task duration)) * 100
-	 * Throws SchedulingError('OVERDUE_TASK') if any involved task is Overdue.
+	 * Compute completeness for a single task and return a percentage 0..100.
+	 * Completeness represents the percentage of work that has been completed.
+	 * For leaf tasks, uses the completeness field directly (scaled by duration).
+	 * For non-leaf tasks, aggregates completeness of all descendants.
 	 */
 	async getTaskCompleteness(taskId: number): Promise<number> {
 		const task = await this.taskRepository.findById(taskId);
@@ -56,21 +56,15 @@ export class TaskCalculator {
 		// Do not abort on Overdue descendants; they are treated as incomplete.
 
 		// Validate and compute durations taking into account completed tasks (prefer actualDurationHour)
-		let activeDescendantsDur = 0;
+		let completedDescendantsDur = 0;
 		let denomDescendantsDur = 0;
 
 		for (const d of descendants) {
 			// Determine the canonical duration value for this task: prefer actual when completed
 			let durValue: number | null = null;
 			if (d.completed) {
-				if (typeof d.actualDurationHour === 'number' && d.actualDurationHour > 0)
-					durValue = d.actualDurationHour;
-				else if (typeof d.estimateDurationHour === 'number' && d.estimateDurationHour > 0)
-					durValue = d.estimateDurationHour;
-				else {
-					// completed descendant with no duration contributes 0 to both numerator/denominator
-					continue;
-				}
+				// Completed tasks should always have actualDurationHour assigned by completeTask()
+				durValue = d.actualDurationHour!;
 			} else {
 				// not completed: must have an estimate
 				if (typeof d.estimateDurationHour !== 'number' || d.estimateDurationHour <= 0) {
@@ -86,36 +80,33 @@ export class TaskCalculator {
 			// Add to denominator (total effort)
 			denomDescendantsDur += durValue;
 
-			// Compute numerator contribution. If this descendant is a leaf, use completeness to reduce remaining
+			// Compute numerator (completed work). If this descendant is a leaf, use completeness to calculate completed portion
 			const isLeaf = !parentIdSet.has(d.id);
 			if (isLeaf) {
-				if (!d.completed) {
+				if (d.completed) {
+					completedDescendantsDur += durValue;
+				} else {
+					// Non-completed tasks are always in valid states: 'In Progress', 'Scheduled', or 'Overdue'
 					const completeness = typeof d.completeness === 'number' ? d.completeness : 0;
-					const remaining =
-						durValue * (1 - Math.max(0, Math.min(100, completeness)) / 100);
-					if (
-						d.state === 'In Progress' ||
-						d.state === 'Scheduled' ||
-						d.state === 'Overdue'
-					)
-						activeDescendantsDur += remaining;
+					const completed =
+						durValue * (Math.max(0, Math.min(100, completeness)) / 100);
+					completedDescendantsDur += completed;
 				}
-				// completed leaf contributes 0 to numerator
 			} else {
-				// non-leaf: include full duration if task is active
-				if (d.state === 'In Progress' || d.state === 'Scheduled' || d.state === 'Overdue')
-					activeDescendantsDur += durValue;
+				// non-leaf: include 0 duration if task is active (children determine completion)
+				// If all children complete, parent would be marked complete
+				if (d.completed) {
+					completedDescendantsDur += durValue;
+				}
+				// Active non-leaf contributes 0 to completed (completion comes from children)
 			}
 		}
 
 		// Compute parent (task itself) duration contributions. Prefer actual when completed.
 		let parentDurValue: number | null = null;
 		if (task.completed) {
-			if (typeof task.actualDurationHour === 'number' && task.actualDurationHour > 0)
-				parentDurValue = task.actualDurationHour;
-			else if (typeof task.estimateDurationHour === 'number' && task.estimateDurationHour > 0)
-				parentDurValue = task.estimateDurationHour;
-			else parentDurValue = 0; // completed with no duration -> 0
+			// Completed tasks should always have actualDurationHour assigned by completeTask()
+			parentDurValue = task.actualDurationHour!;
 		} else {
 			if (typeof task.estimateDurationHour !== 'number' || task.estimateDurationHour <= 0) {
 				throw new TaskCalculator.SchedulingError(
@@ -130,26 +121,25 @@ export class TaskCalculator {
 		// Denominator always includes the task's canonical duration
 		const denominator = denomDescendantsDur + (parentDurValue || 0);
 
-		// Numerator: if the task is a leaf, apply completeness to its remaining; otherwise include its full duration if active
+		// Numerator: if the task is a leaf, apply completeness to calculate completed portion; otherwise completed if marked complete
 		let parentNumerator = 0;
 		const taskIsLeaf = !descendants.some((x) => x.parentTask && x.parentTask.id === task.id);
 		if (taskIsLeaf) {
-			if (!task.completed) {
+			if (task.completed) {
+				parentNumerator = parentDurValue || 0;
+			} else {
 				const completeness = typeof task.completeness === 'number' ? task.completeness : 0;
 				parentNumerator =
-					(parentDurValue || 0) * (1 - Math.max(0, Math.min(100, completeness)) / 100);
+					(parentDurValue || 0) * (Math.max(0, Math.min(100, completeness)) / 100);
 			}
-			// completed leaf contributes 0
 		} else {
-			if (
-				task.state === 'In Progress' ||
-				task.state === 'Scheduled' ||
-				task.state === 'Overdue'
-			)
+			if (task.completed) {
 				parentNumerator = parentDurValue || 0;
+			}
+			// Active non-leaf contributes 0 to completed (completion comes from children)
 		}
 
-		const numerator = activeDescendantsDur + parentNumerator;
+		const numerator = completedDescendantsDur + parentNumerator;
 		if (denominator === 0) return 0;
 		const fraction = numerator / denominator;
 		const percent = Math.round(Math.max(0, Math.min(1, fraction)) * 100);

@@ -114,4 +114,41 @@ describe('TaskDependencyManager', () => {
 		const result = await manager.getAllAncestors(99);
 		expect(result).toEqual([]);
 	});
+
+	it('should handle when parent lookup fails during cycle traversal', async () => {
+		mockRepo.findById
+			.mockResolvedValueOnce({ parentTask: { id: 2 } })
+			.mockResolvedValueOnce(null); // parent lookup fails
+		const result = await manager.wouldCreateCycle(1, 2);
+		expect(result).toBe(false);
+	});
+
+	it('should handle when parent is null during project root traversal', async () => {
+		mockRepo.findById
+			.mockResolvedValueOnce({ id: 2, parentTask: { id: 1 } })
+			.mockResolvedValueOnce(null); // parent lookup returns null
+		const result = await manager.getProjectRoot(2);
+		expect(result).toEqual({ id: 2, parentTask: { id: 1 } });
+	});
+
+	it('should return task itself if it is the root', async () => {
+		const rootTask = { id: 1, parentTask: null };
+		mockRepo.findById.mockResolvedValue(rootTask);
+		const result = await manager.getProjectRoot(1);
+		expect(result).toEqual(rootTask);
+	});
+
+	it('should handle empty descendants list', async () => {
+		const parent = { id: 1 };
+		mockRepo.findById.mockResolvedValue(parent);
+		mockRepo.findDescendants.mockResolvedValue([]);
+		const result = await manager.getAllDescendants(1);
+		expect(result).toEqual([]);
+	});
+
+	it('should handle cycle detection when task has no parent', async () => {
+		mockRepo.findById.mockResolvedValueOnce({ parentTask: null });
+		const result = await manager.wouldCreateCycle(1, 2);
+		expect(result).toBe(false);
+	});
 });

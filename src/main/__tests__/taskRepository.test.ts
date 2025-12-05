@@ -33,7 +33,7 @@ describe('TaskRepository', () => {
 		mockOrmRepo.find.mockResolvedValue(tasks);
 		const result = await repo.findAll();
 		expect(mockOrmRepo.find).toHaveBeenCalledWith({
-			relations: ['category', 'tags'],
+			relations: ['category', 'tags', 'parentTask'],
 			order: { title: 'ASC' },
 		});
 		expect(result).toBe(tasks);
