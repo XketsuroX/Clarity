@@ -18,8 +18,9 @@ describe('TaskManager', () => {
 	const MOCK_TIMESTAMP = MOCK_DATE.getTime();
 
 	beforeEach(() => {
-		// Mock Date.now() to return a consistent timestamp
-		jest.spyOn(Date, 'now').mockReturnValue(MOCK_TIMESTAMP);
+		// Freeze time so all Date() calls (and Date.now) are consistent
+		jest.useFakeTimers();
+		jest.setSystemTime(MOCK_DATE);
 
 		manager = new TaskManager();
 		mockRepo = (manager as any).taskRepository as jest.Mocked<TaskRepository>;
@@ -40,7 +41,7 @@ describe('TaskManager', () => {
 	});
 
 	afterEach(() => {
-		// Don't restore - just let jest manage mock states between tests
+		jest.useRealTimers();
 	});
 
 	it('should add a task and return its JSON', async () => {
@@ -95,6 +96,19 @@ describe('TaskManager', () => {
 		if (result.ok) {
 			expect(result.value).toBe(true);
 		}
+	});
+
+	it('should refresh parent completeness when removing a child task', async () => {
+		const parent = { id: 42 } as any;
+		const child = { id: 5, parentTask: parent } as any;
+		mockRepo.findById.mockResolvedValue(child);
+		mockRepo.delete.mockResolvedValue(true);
+
+		const result = await manager.removeTask(5);
+
+		expect((manager as any).refreshCompleteness).toHaveBeenCalledWith(42);
+		expect(mockRepo.delete).toHaveBeenCalledWith(5);
+		expect(result.ok).toBe(true);
 	});
 
 	it('should toggle complete', async () => {
@@ -243,6 +257,29 @@ describe('TaskManager', () => {
 
 		const result = await manager.startTask(1);
 		expect(result.ok).toBe(false);
+	});
+
+	it('should use current time when starting and refresh aggregates', async () => {
+		const task = {
+			id: 7,
+			state: 'Scheduled',
+			toJSON: () => ({ id: 7, state: 'In Progress' }),
+		} as any;
+		mockRepo.findById.mockResolvedValue(task);
+		mockRepo.setActualStart.mockImplementation(async (_id: number, date: Date) => ({
+			...task,
+			state: 'In Progress',
+			actualStartDate: date,
+		}));
+
+		const result = await manager.startTask(7);
+
+		expect(mockRepo.setActualStart).toHaveBeenCalledWith(7, expect.any(Date));
+		expect((mockRepo.setActualStart as jest.Mock).mock.calls[0][1].getTime()).toBe(
+			MOCK_TIMESTAMP
+		);
+		expect((manager as any).refreshCompleteness).toHaveBeenCalledWith(7);
+		expect(result.ok).toBe(true);
 	});
 
 	// ===== completeTask Tests =====
@@ -723,6 +760,158 @@ describe('TaskManager', () => {
 
 		const result = await manager.updateTask(2, { title: 'Updated' });
 		expect(result.ok).toBe(true);
+	});
+
+	// ===== refreshCompleteness internal tests =====
+
+	it('should refreshCompleteness fully and update only non-leaf tasks', async () => {
+		const localManager = new TaskManager();
+		const localRepo = (localManager as any).taskRepository as jest.Mocked<TaskRepository>;
+		const localCalc = (localManager as any).calculator as jest.Mocked<TaskCalculator>;
+
+		const parentTask = { id: 1, childrenTasks: [{ id: 2 }] } as any;
+		const leafTask = { id: 2, childrenTasks: [] } as any;
+		localRepo.findAll.mockResolvedValue([parentTask, leafTask]);
+		localRepo.findById.mockImplementation(async (id: number) => {
+			if (id === 1) return parentTask as any;
+			if (id === 2) return leafTask as any;
+			return null as any;
+		});
+		localCalc.getTaskCompleteness.mockResolvedValue(42);
+		localRepo.setCompleteness.mockResolvedValue({} as any);
+
+		await (localManager as any).refreshCompleteness();
+
+		expect(localCalc.getTaskCompleteness).toHaveBeenCalledWith(1);
+		expect(localRepo.setCompleteness).toHaveBeenCalledWith(1, 42);
+		expect(localRepo.setCompleteness).toHaveBeenCalledTimes(1);
+	});
+
+	it('should refreshCompleteness partially for affected task and ancestors with children', async () => {
+		const localManager = new TaskManager();
+		const localRepo = (localManager as any).taskRepository as jest.Mocked<TaskRepository>;
+		const localDep = (localManager as any)
+			.dependencyManager as jest.Mocked<TaskDependencyManager>;
+		const localCalc = (localManager as any).calculator as jest.Mocked<TaskCalculator>;
+
+		const affected = { id: 5, childrenTasks: [{ id: 6 }] } as any;
+		const ancestor = { id: 9, childrenTasks: [{ id: 10 }] } as any;
+		const leaf = { id: 6, childrenTasks: [] } as any;
+
+		localRepo.findById.mockImplementation(async (id: number) => {
+			if (id === 5) return affected as any;
+			if (id === 9) return ancestor as any;
+			if (id === 6) return leaf as any;
+			return null as any;
+		});
+		localDep.getAllAncestors.mockResolvedValue([9]);
+		localCalc.getTaskCompleteness
+			.mockResolvedValueOnce(11) // affected
+			.mockResolvedValueOnce(22); // ancestor
+		localRepo.setCompleteness.mockResolvedValue({} as any);
+
+		await (localManager as any).refreshCompleteness(5);
+
+		expect(localCalc.getTaskCompleteness).toHaveBeenCalledWith(5);
+		expect(localCalc.getTaskCompleteness).toHaveBeenCalledWith(9);
+		expect(localRepo.setCompleteness).toHaveBeenCalledWith(5, 11);
+		expect(localRepo.setCompleteness).toHaveBeenCalledWith(9, 22);
+		// leaf task should never be updated
+		expect(localRepo.setCompleteness).not.toHaveBeenCalledWith(6, expect.any(Number));
+	});
+
+	it('should skip refreshCompleteness partial when affected task has no children', async () => {
+		const localManager = new TaskManager();
+		const localRepo = (localManager as any).taskRepository as jest.Mocked<TaskRepository>;
+		const localDep = (localManager as any)
+			.dependencyManager as jest.Mocked<TaskDependencyManager>;
+		const localCalc = (localManager as any).calculator as jest.Mocked<TaskCalculator>;
+
+		const leaf = { id: 7, childrenTasks: [] } as any;
+		localRepo.findById.mockResolvedValue(leaf);
+		localDep.getAllAncestors.mockResolvedValue([]);
+
+		await (localManager as any).refreshCompleteness(7);
+
+		expect(localCalc.getTaskCompleteness).not.toHaveBeenCalled();
+		expect(localRepo.setCompleteness).not.toHaveBeenCalled();
+	});
+
+	it('should ignore calculator errors during partial refreshCompleteness', async () => {
+		const localManager = new TaskManager();
+		const localRepo = (localManager as any).taskRepository as jest.Mocked<TaskRepository>;
+		const localDep = (localManager as any)
+			.dependencyManager as jest.Mocked<TaskDependencyManager>;
+		const localCalc = (localManager as any).calculator as jest.Mocked<TaskCalculator>;
+
+		const affected = { id: 11, childrenTasks: [{ id: 12 }] } as any;
+		const ancestor = { id: 21, childrenTasks: [{ id: 22 }] } as any;
+		localRepo.findById.mockImplementation(async (id: number) => {
+			if (id === 11) return affected as any;
+			if (id === 21) return ancestor as any;
+			return null as any;
+		});
+		localDep.getAllAncestors.mockResolvedValue([21]);
+		localCalc.getTaskCompleteness.mockRejectedValue(new Error('boom'));
+
+		await (localManager as any).refreshCompleteness(11);
+
+		expect(localCalc.getTaskCompleteness).toHaveBeenCalledWith(11);
+		expect(localCalc.getTaskCompleteness).toHaveBeenCalledWith(21);
+		expect(localRepo.setCompleteness).not.toHaveBeenCalled();
+	});
+
+	it('should ignore calculator errors during full refreshCompleteness', async () => {
+		const localManager = new TaskManager();
+		const localRepo = (localManager as any).taskRepository as jest.Mocked<TaskRepository>;
+		const localCalc = (localManager as any).calculator as jest.Mocked<TaskCalculator>;
+
+		const parentTask = { id: 3, childrenTasks: [{ id: 4 }] } as any;
+		localRepo.findAll.mockResolvedValue([parentTask]);
+		localRepo.findById.mockResolvedValue(parentTask as any);
+		localCalc.getTaskCompleteness.mockRejectedValue(new Error('calc failed'));
+
+		await (localManager as any).refreshCompleteness();
+
+		expect(localCalc.getTaskCompleteness).toHaveBeenCalledWith(3);
+		// error is swallowed, so setCompleteness is never called
+		expect(localRepo.setCompleteness).not.toHaveBeenCalled();
+	});
+
+	it('should uncomplete to In Progress when deadline is future', async () => {
+		const futureDeadline = new Date(MOCK_TIMESTAMP + 1000 * 60 * 60); // 1 hour after now
+		const task = {
+			id: 1,
+			completed: true,
+			childrenTasks: [],
+			deadline: futureDeadline,
+			toJSON: () => ({ id: 1, completed: false, state: 'In Progress' }),
+		} as any;
+		mockRepo.findById.mockResolvedValue(task);
+		mockRepo.setCompletion.mockResolvedValue({
+			...task,
+			completed: false,
+			state: 'In Progress',
+		});
+
+		const result = await manager.completeTask(1); // toggles to uncomplete
+
+		expect(mockRepo.setCompletion).toHaveBeenCalledWith(1, false, 'In Progress', null, null);
+		expect(result.ok).toBe(true);
+	});
+
+	it('should not mark already overdue task again in refreshOverdue', async () => {
+		const overdueTask = {
+			id: 1,
+			completed: false,
+			deadline: new Date(MOCK_TIMESTAMP - 1000),
+			state: 'Overdue',
+		} as any;
+		mockRepo.findAll.mockResolvedValue([overdueTask]);
+
+		await manager.refreshOverdue();
+
+		expect(mockRepo.setCompletion).not.toHaveBeenCalled();
 	});
 
 	// ===== Additional Date Mocking Tests =====

@@ -50,6 +50,13 @@ describe('TaskRepository', () => {
 		expect(result).toBe(task);
 	});
 
+	it('should return null when findById misses', async () => {
+		mockOrmRepo.findOne.mockResolvedValue(null);
+		const result = await repo.findById(123);
+		expect(mockOrmRepo.findOne).toHaveBeenCalled();
+		expect(result).toBeNull();
+	});
+
 	it('should create a task', async () => {
 		const data = {
 			title: 'A',

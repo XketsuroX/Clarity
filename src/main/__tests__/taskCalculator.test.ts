@@ -124,6 +124,31 @@ describe('TaskCalculator', () => {
 		expect(result).toBeLessThanOrEqual(100);
 	});
 
+	it('should use actual duration for completed parent and aggregate descendants', async () => {
+		const parent = {
+			id: 1,
+			completed: true,
+			actualDurationHour: 4,
+			estimateDurationHour: 10,
+			state: 'Completed',
+			childrenTasks: [{ id: 2 }],
+		};
+		const child = {
+			id: 2,
+			parentTask: { id: 1 },
+			completed: false,
+			estimateDurationHour: 6,
+			completeness: 50,
+			state: 'In Progress',
+		};
+		mockRepo.findById.mockResolvedValue(parent);
+		mockRepo.findDescendants.mockResolvedValue([parent, child]);
+
+		const result = await calculator.getTaskCompleteness(1);
+
+		expect(result).toBe(70); // 4 completed hours from parent + 3 from child (50% of 6) over total 10
+	});
+
 	it('should compute completeness using actual duration for completed tasks', async () => {
 		const task = {
 			id: 1,
