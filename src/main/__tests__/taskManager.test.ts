@@ -36,7 +36,7 @@ describe('TaskManager', () => {
 		mockRepo.findAll.mockResolvedValue([]);
 
 		// Stub the private refreshCompleteness method to prevent complex internal calls
-		// This allows us to test the public methods without mocking all internal dependencies
+		// This allows us to test the public methods without mocking all Dinternal dependencies
 		jest.spyOn(manager as any, 'refreshCompleteness').mockResolvedValue(undefined);
 	});
 
@@ -359,8 +359,7 @@ describe('TaskManager', () => {
 		expect(callArgs[1]).toBe(true);
 		expect(callArgs[2]).toBe('Completed');
 		expect(callArgs[3]).toBeInstanceOf(Date);
-		expect(callArgs[4]).toBeGreaterThan(9); // At least 9 hours
-		expect(callArgs[4]).toBeLessThan(11); // Less than 11 hours
+		expect(callArgs[4]).toBe(10);
 		expect(result.ok).toBe(true);
 	});
 
@@ -654,8 +653,7 @@ describe('TaskManager', () => {
 		const result = await manager.completeTask(1);
 		// Should calculate ~5 hours duration (allowing variance due to real Date() timing)
 		const callArgs = (mockRepo.setCompletion as jest.Mock).mock.calls[0];
-		expect(callArgs[4]).toBeGreaterThan(4); // At least 4 hours
-		expect(callArgs[4]).toBeLessThan(6); // Less than 6 hours
+		expect(callArgs[4]).toBe(5);
 		expect(result.ok).toBe(true);
 	});
 
@@ -950,8 +948,7 @@ describe('TaskManager', () => {
 		// Calculate expected duration (approximately 106 hours from 2025-12-01 to 2025-12-05 10:00)
 		const expectedDuration = (MOCK_TIMESTAMP - specificDate.getTime()) / (1000 * 60 * 60);
 		const callArgs = (mockRepo.setCompletion as jest.Mock).mock.calls[0];
-		expect(callArgs[4]).toBeGreaterThan(expectedDuration - 1); // Within 1 hour below
-		expect(callArgs[4]).toBeLessThan(expectedDuration + 1); // Within 1 hour above
+		expect(callArgs[4]).toBe(expectedDuration);
 		expect(result.ok).toBe(true);
 	});
 
@@ -989,7 +986,6 @@ describe('TaskManager', () => {
 
 		const callArgs = (mockRepo.setCompletion as jest.Mock).mock.calls[0];
 		// Duration should be approximately 3 hours (within margin due to Date() timing)
-		expect(callArgs[4]).toBeGreaterThan(2.4); // At least 2.4 hours
-		expect(callArgs[4]).toBeLessThan(3.5); // Less than 3.5 hours
+		expect(callArgs[4]).toBe(3);
 	});
 });
