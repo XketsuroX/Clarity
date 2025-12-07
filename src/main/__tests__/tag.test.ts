@@ -2,11 +2,11 @@ import { Tag } from '../Tag';
 
 describe('Tag Entity', () => {
 	it('should create a tag with default color', () => {
-		const tag = new Tag('My Tag');
+		const tag = new Tag('Defaulted');
+		tag.id = 11;
 
-		expect(tag.id).toBeUndefined();
-		expect(tag.name).toBe('My Tag');
 		expect(tag.color).toBe('#000000');
+		expect(tag.toJSON()).toEqual({ id: 11, name: 'Defaulted', color: '#000000' });
 	});
 
 	it('should return correct JSON structure', () => {

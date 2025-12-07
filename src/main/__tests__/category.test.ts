@@ -24,4 +24,12 @@ describe('Category Entity', () => {
 			title: 'Hobby',
 		});
 	});
+
+	it('should allow empty title and still serialize', () => {
+		const category = new Category();
+		category.id = 11;
+		category.title = '';
+
+		expect(category.toJSON()).toEqual({ id: 11, title: '' });
+	});
 });

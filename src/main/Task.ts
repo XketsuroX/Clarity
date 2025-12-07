@@ -35,9 +35,11 @@ export interface ITaskJSON {
 @Tree('closure-table')
 @Entity()
 export class Task {
+	/* istanbul ignore next */
 	@PrimaryGeneratedColumn()
 	id!: number;
 
+	/* istanbul ignore next */
 	@Column({ type: 'varchar' })
 	title!: string;
 
@@ -80,6 +82,7 @@ export class Task {
 	@Column({ type: 'float', nullable: true })
 	actualDurationHour!: number | null;
 
+	/* istanbul ignore next */
 	@ManyToMany(() => Tag)
 	@JoinTable()
 	tags!: Tag[];

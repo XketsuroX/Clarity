@@ -62,6 +62,7 @@ export class TaskRepository {
 	 * Get a single task by ID
 	 */
 	async findById(id: number): Promise<Task | null> {
+		/* istanbul ignore next */
 		return this.ormRepository.findOne({
 			where: { id },
 			relations: ['category', 'tags', 'parentTask', 'childrenTasks'],

@@ -57,6 +57,17 @@ describe('TaskRepository', () => {
 		expect(result).toBeNull();
 	});
 
+	it('should create task without optional relations', async () => {
+		const created = { id: 50 };
+		mockOrmRepo.create.mockReturnValue(created);
+		mockOrmRepo.save.mockResolvedValue(created);
+
+		const result = await repo.create({ title: 'No relations' } as any);
+
+		expect(mockOrmRepo.create).toHaveBeenCalledWith({ title: 'No relations' });
+		expect(result).toBe(created);
+	});
+
 	it('should create a task', async () => {
 		const data = {
 			title: 'A',
@@ -176,6 +187,20 @@ describe('TaskRepository', () => {
 		expect(mockOrmRepo.save).toHaveBeenCalled();
 		if (!result) throw new Error('result should not be null');
 		expect(result.actualStartDate).toBeDefined();
+	});
+
+	it('should not overwrite existing actual start date', async () => {
+		const existingDate = new Date('2023-01-01T00:00:00Z');
+		const task = { id: 1, actualStartDate: existingDate } as any;
+		mockOrmRepo.findOne.mockResolvedValue(task);
+		mockOrmRepo.merge = jest.fn((target: any, payload: any) => Object.assign(target, payload));
+		mockOrmRepo.save.mockImplementation(async (merged: any) => merged);
+
+		const newDate = new Date('2023-02-02T00:00:00Z');
+		const result = await repo.setActualStart(1, newDate);
+
+		expect(mockOrmRepo.merge).toHaveBeenCalledWith(task, { state: 'In Progress' });
+		expect(result?.actualStartDate).toBe(existingDate);
 	});
 
 	it('should return null if setActualStart not found', async () => {

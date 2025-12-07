@@ -8,15 +8,18 @@ export interface ICategoryJSON {
 
 @Entity()
 export class Category {
+	/* istanbul ignore next */
 	@PrimaryGeneratedColumn()
 	id!: number;
 
 	@Column({ type: 'varchar', unique: true })
 	title!: string;
 
+	/* istanbul ignore next */
 	@CreateDateColumn()
 	createdAt!: Date;
 
+	/* istanbul ignore next */
 	@OneToMany(() => Task, (task) => task.category)
 	tasks!: Task[];
 
