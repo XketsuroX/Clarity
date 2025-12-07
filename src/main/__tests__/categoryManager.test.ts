@@ -32,7 +32,7 @@ describe('CategoryManager', () => {
 
 	it('should allow same title if editing the same category', async () => {
 		mockRepo.findByName.mockResolvedValue({ id: 5, title: 'Work' } as any);
-		// currentId ?�查?��? id ?��?，�?該�??�錯
+		// currentId 與查到的 id 相同，應該不拋錯
 		const managerAny = manager as any;
 		await expect(managerAny.validateTitle('Work', 5)).resolves.toBe('Work');
 	});
@@ -238,12 +238,12 @@ describe('CategoryManager', () => {
 		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
-			title: '工�? ??',
-			toJSON: () => ({ id: 1, title: '工�? ??' }),
+			title: '工作 📁',
+			toJSON: () => ({ id: 1, title: '工作 📁' }),
 		} as any);
 
-		const result = await manager.addCategory('工�? ??');
-		expect(result.title).toBe('工�? ??');
+		const result = await manager.addCategory('工作 📁');
+		expect(result.title).toBe('工作 📁');
 	});
 
 	it('should handle category title with leading/trailing newlines', async () => {
