@@ -85,8 +85,7 @@ export class TaskCalculator {
 				} else {
 					// Non-completed tasks are always in valid states: 'In Progress', 'Scheduled', or 'Overdue'
 					const completeness = typeof d.completeness === 'number' ? d.completeness : 0;
-					const completed =
-					durValue * (Math.max(0, Math.min(100, completeness)) / 100);
+					const completed = durValue * (Math.max(0, Math.min(100, completeness)) / 100);
 					completedDescendantsDur += completed;
 				}
 			} else {
