@@ -14,14 +14,13 @@ export function unwrapResult<T>(res: unknown): T {
 	if (
 		typeof window !== 'undefined' &&
 		(window as unknown as { api?: { unwrapResult?: (r: unknown) => T } }).api &&
-		typeof (
-			window as unknown as { api: { unwrapResult?: (r: unknown) => T } }
-		).api.unwrapResult === 'function'
+		typeof (window as unknown as { api: { unwrapResult?: (r: unknown) => T } }).api
+			.unwrapResult === 'function'
 	) {
 		// @ts-ignore preload api unwrap helper
-		return (
-			window as unknown as { api: { unwrapResult: (r: unknown) => T } }
-		).api.unwrapResult(res);
+		return (window as unknown as { api: { unwrapResult: (r: unknown) => T } }).api.unwrapResult(
+			res
+		);
 	}
 
 	// Fallback runtime unwrap
