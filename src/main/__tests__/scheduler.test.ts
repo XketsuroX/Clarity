@@ -120,4 +120,52 @@ describe('Scheduler', () => {
 		expect(result[0].isPartial).toBe(false);
 		expect(result[0].scheduledDuration).toBe(2);
 	});
+
+	it('should use default timeUnit when omitted', async () => {
+		const tasks: Task[] = [
+			{ id: 1, title: 'A', estimateDurationHour: 1, priority: 1, isSplittable: false } as any,
+		];
+		(taskCalculator.getTaskUrgency as jest.Mock).mockResolvedValue(5);
+
+		const result = await scheduler.schedule(tasks, 1); // omit timeUnit to use default 0.5
+
+		expect(result[0].scheduledDuration).toBe(1); // 2 units * 0.5 default
+		expect(result[0].isPartial).toBe(false);
+	});
+
+	it('should handle missing estimateDurationHour via fallback', async () => {
+		const tasks: Task[] = [
+			{ id: 3, title: 'Fallback', estimateDurationHour: undefined as any, priority: 2, isSplittable: false } as any,
+		];
+		(taskCalculator.getTaskUrgency as jest.Mock).mockResolvedValue(4);
+
+		const result = await scheduler.schedule(tasks, 1, 0.5);
+
+		expect(result[0].scheduledDuration).toBeCloseTo(1); // uses fallback estimate=1
+		expect(result[0].isPartial).toBe(false);
+	});
+
+	it('should handle zero capacity by selecting nothing', async () => {
+		const tasks: Task[] = [
+			{
+				id: 1,
+				title: 'Big',
+				estimateDurationHour: 2,
+				priority: 1,
+				isSplittable: false,
+			} as any,
+			{
+				id: 2,
+				title: 'Big2',
+				estimateDurationHour: 3,
+				priority: 1,
+				isSplittable: true,
+			} as any,
+		];
+		(taskCalculator.getTaskUrgency as jest.Mock).mockResolvedValue(1);
+
+		const result = await scheduler.schedule(tasks, 0, 1);
+
+		expect(result).toEqual([]);
+	});
 });

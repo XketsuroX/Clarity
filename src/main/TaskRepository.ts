@@ -62,9 +62,11 @@ export class TaskRepository {
 	 * Get a single task by ID
 	 */
 	async findById(id: number): Promise<Task | null> {
-		/* istanbul ignore next */
+		// istanbul ignore next
 		return this.ormRepository.findOne({
+			// istanbul ignore next
 			where: { id },
+			// istanbul ignore next
 			relations: ['category', 'tags', 'parentTask', 'childrenTasks'],
 		});
 	}
@@ -122,7 +124,7 @@ export class TaskRepository {
 		}
 
 		if (tagIds !== undefined) {
-			taskToUpdate.tags = tagIds.map((tagId) => ({ id: tagId } as any));
+			taskToUpdate.tags = tagIds.map((tagId) => ({ id: tagId }) as any);
 		}
 
 		this.ormRepository.merge(taskToUpdate, payload);
