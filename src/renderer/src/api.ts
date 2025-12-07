@@ -1,26 +1,35 @@
 import { TaskJSON, TaskAddParams, TaskUpdateParams, TaskIdParam } from '../../shared/TaskTypes';
-import { CategoryJSON, CategoryCreateParam, CategoryUpdateParam } from '../../shared/CategoryTypes';
+import {
+	CategoryJSON,
+	CategoryCreateParam,
+	CategoryUpdateParam,
+	CategoryIdParam,
+} from '../../shared/CategoryTypes';
 import { TagCreateParam, TagIdParam, TagJSON, TagUpdateParam } from '../../shared/TagTypes';
-import { ScheduleGenerateParams } from 'src/shared/SchedulerTypes';
+import { ScheduleGenerateParams, ScheduleItem } from 'src/shared/SchedulerTypes';
 
 export function unwrapResult<T>(res: unknown): T {
 	// If preload provided an unwrap helper, delegate to it
-	// @ts	-ignore
+	// @ts-ignore preload api unwrap helper
 	if (
 		typeof window !== 'undefined' &&
-		(window as any).api &&
-		typeof (window as any).api.unwrapResult === 'function'
+		(window as unknown as { api?: { unwrapResult?: (r: unknown) => T } }).api &&
+		typeof (
+			window as unknown as { api: { unwrapResult?: (r: unknown) => T } }
+		).api.unwrapResult === 'function'
 	) {
-		// @ts-ignore ignore
-		return (window as any).api.unwrapResult(res) as T;
+		// @ts-ignore preload api unwrap helper
+		return (
+			window as unknown as { api: { unwrapResult: (r: unknown) => T } }
+		).api.unwrapResult(res);
 	}
 
 	// Fallback runtime unwrap
-	if (res && typeof res === 'object' && 'ok' in (res as any)) {
-		const r = res as any;
+	if (res && typeof res === 'object' && 'ok' in (res as Record<string, unknown>)) {
+		const r = res as Record<string, unknown>;
 		if (r.ok) return r.value as T;
-		const err = r.error ?? {};
-		const msg = err.message ?? err.code ?? 'Unknown error';
+		const err = (r.error as Record<string, string>) || {};
+		const msg = (err.message as string) || (err.code as string) || 'Unknown error';
 		throw new Error(msg);
 	}
 
@@ -92,7 +101,7 @@ export async function toggleTaskComplete(id: TaskIdParam): Promise<TaskJSON> {
 	return unwrapResult(result);
 }
 
-export async function generateSchedule(params: ScheduleGenerateParams): Promise<any[]> {
+export async function generateSchedule(params: ScheduleGenerateParams): Promise<ScheduleItem[]> {
 	const result = await window.electron.ipcRenderer.invoke('schedule:generate', params);
 	return unwrapResult(result);
 }

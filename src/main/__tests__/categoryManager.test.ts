@@ -13,7 +13,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should add a category after validating title', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
 			title: 'Work',
@@ -32,7 +32,7 @@ describe('CategoryManager', () => {
 
 	it('should allow same title if editing the same category', async () => {
 		mockRepo.findByName.mockResolvedValue({ id: 5, title: 'Work' } as any);
-		// currentId 與查到的 id 相同，應該不拋錯
+		// currentId ?�查?��? id ?��?，�?該�??�錯
 		const managerAny = manager as any;
 		await expect(managerAny.validateTitle('Work', 5)).resolves.toBe('Work');
 	});
@@ -60,7 +60,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should trim title before adding', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 3,
 			title: 'Work',
@@ -133,7 +133,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should rename a category', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.update.mockResolvedValue({
 			id: 1,
 			title: 'Updated Work',
@@ -147,7 +147,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should return null if renameCategory fails to find category', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.update.mockResolvedValue(null);
 
 		const result = await manager.renameCategory(999, 'New Name');
@@ -156,7 +156,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should trim title before renaming', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.update.mockResolvedValue({
 			id: 1,
 			title: 'Trimmed',
@@ -198,7 +198,7 @@ describe('CategoryManager', () => {
 	// ===== Edge Cases =====
 
 	it('should handle category with special characters in title', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
 			title: 'Work/Home & Family!',
@@ -211,7 +211,7 @@ describe('CategoryManager', () => {
 
 	it('should handle very long category title', async () => {
 		const longTitle = 'A'.repeat(200);
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
 			title: longTitle,
@@ -223,7 +223,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should handle category title with only spaces inside', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
 			title: 'A B C',
@@ -235,19 +235,19 @@ describe('CategoryManager', () => {
 	});
 
 	it('should handle unicode characters in category title', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
-			title: '工作 📁',
-			toJSON: () => ({ id: 1, title: '工作 📁' }),
+			title: '工�? ??',
+			toJSON: () => ({ id: 1, title: '工�? ??' }),
 		} as any);
 
-		const result = await manager.addCategory('工作 📁');
-		expect(result.title).toBe('工作 📁');
+		const result = await manager.addCategory('工�? ??');
+		expect(result.title).toBe('工�? ??');
 	});
 
 	it('should handle category title with leading/trailing newlines', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
 			title: 'Work',
@@ -260,7 +260,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should handle category title with tabs', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
 			title: 'Work',
@@ -300,7 +300,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should handle renameCategory with id = 0', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.update.mockResolvedValue({
 			id: 0,
 			title: 'Renamed',
@@ -320,7 +320,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should handle title with mixed whitespace types', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
 			title: 'Work',
@@ -333,7 +333,7 @@ describe('CategoryManager', () => {
 	});
 
 	it('should handle single character category title', async () => {
-		mockRepo.findByName.mockResolvedValue(undefined);
+		mockRepo.findByName.mockResolvedValue(null);
 		mockRepo.create.mockResolvedValue({
 			id: 1,
 			title: 'A',

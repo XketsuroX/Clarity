@@ -1,6 +1,8 @@
 import { DeepPartial, Repository } from 'typeorm';
 import { AppDataSource } from './Database';
 import { Task } from './Task';
+import { Category } from './Category';
+import { Tag } from './Tag';
 
 export interface CreateTaskData {
 	title: string;
@@ -116,7 +118,8 @@ export class TaskRepository {
 		const payload: DeepPartial<Task> = { ...taskUpdates };
 
 		if (categoryId !== undefined) {
-			taskToUpdate.category = categoryId === null ? null : ({ id: categoryId } as any);
+			taskToUpdate.category =
+				categoryId === null ? null : ({ id: categoryId } as unknown as Category);
 		}
 
 		if (parentTaskId !== undefined) {
@@ -124,7 +127,7 @@ export class TaskRepository {
 		}
 
 		if (tagIds !== undefined) {
-			taskToUpdate.tags = tagIds.map((tagId) => ({ id: tagId }) as any);
+			taskToUpdate.tags = tagIds.map((tagId) => ({ id: tagId })) as unknown as Tag[];
 		}
 
 		this.ormRepository.merge(taskToUpdate, payload);

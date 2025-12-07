@@ -2,7 +2,7 @@ import { Task } from '../Task';
 import { Category } from '../Category';
 import { Tag } from '../Tag';
 
-const iso = (d: Date) => d.toISOString();
+const iso = (d: Date): string => d.toISOString();
 
 describe('Task entity', () => {
 	it('should serialize all fields with relationships', () => {

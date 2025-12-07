@@ -19,7 +19,7 @@ export class Scheduler {
 		capacityHours: number,
 		timeUnit: number = 0.5
 	): Promise<{ taskId: number; title: string; scheduledDuration: number; isPartial: boolean }[]> {
-		const effectiveTimeUnit = timeUnit ?? 0.5; // explicit fallback to exercise both branches
+		const effectiveTimeUnit = timeUnit || 0.5; // fallback for missing timeUnit
 
 		// 1. 【關鍵步驟】物品轉換與拆分
 		const items: IKnapsackItem[] = [];

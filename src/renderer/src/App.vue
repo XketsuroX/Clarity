@@ -115,11 +115,12 @@ const scheduleConfig = ref({ hours: 4 });
 const scheduleResult = ref<ScheduleItem[]>([]);
 
 // --- Helpers ---
-const getCategoryName = (id?: number): string | null => {
-	if (!id) return null;
-	const cat = categories.value.find((c) => c.id === id);
-	return cat ? cat.title : null;
-};
+// Unused helper function - kept for reference
+// const getCategoryName = (id?: number): string | null => {
+// 	if (!id) return null;
+// 	const cat = categories.value.find((c) => c.id === id);
+// 	return cat ? cat.title : null;
+// };
 
 const getTaskTags = (tagIds?: number[]): TagJSON[] =>
 	tags.value.filter((tag) => tagIds?.includes(tag.id));

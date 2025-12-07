@@ -1,4 +1,4 @@
-import { ITagJSON, ITagJSON, Tag } from '../Tag';
+import { ITagJSON, Tag } from '../Tag';
 import { TagManager } from '../TagManager';
 import { TagRepository } from '../TagRepository';
 
@@ -9,7 +9,7 @@ describe('TagManager', () => {
 	let mockRepo: jest.Mocked<TagRepository>;
 
 	beforeEach(() => {
-		manager = new TagManager();
+		manager = TagManager.getInstance();
 		mockRepo = (manager as any).tagRepository as jest.Mocked<TagRepository>;
 		(manager as any).availableTags = [];
 	});
@@ -27,7 +27,9 @@ describe('TagManager', () => {
 		expect(mockRepo.addTag).toHaveBeenCalledWith('Test', '#000000');
 		expect((manager as any).availableTags).toContain(tag);
 		expect(result.ok).toBe(true);
-		expect(result.value).toEqual({ id: 1, name: 'Test', color: '#000000' });
+		if (result.ok) {
+			expect(result.value).toEqual({ id: 1, name: 'Test', color: '#000000' });
+		}
 	});
 
 	it('should update a tag and update availableTags', async () => {
@@ -50,7 +52,9 @@ describe('TagManager', () => {
 		expect(mockRepo.updateTag).toHaveBeenCalledWith(2, { name: 'New', color: '#222222' });
 		expect((manager as any).availableTags[0]).toBe(updatedTag);
 		expect(result.ok).toBe(true);
-		expect(result.value).toEqual({ id: 2, name: 'New', color: '#222222' });
+		if (result.ok) {
+			expect(result.value).toEqual({ id: 2, name: 'New', color: '#222222' });
+		}
 	});
 
 	it('should return error if updateTag not found', async () => {
@@ -85,7 +89,12 @@ describe('TagManager', () => {
 	});
 
 	it('should get a tag by id', async () => {
-		const tag = { id: 5, name: 'Tag5', color: '#555' };
+		const tag = {
+			id: 5,
+			name: 'Tag5',
+			color: '#555',
+			toJSON: () => ({ id: 5, name: 'Tag5', color: '#555' }),
+		} as any;
 		mockRepo.getTagById.mockResolvedValue(tag);
 
 		const result = await manager.getTagById(5);

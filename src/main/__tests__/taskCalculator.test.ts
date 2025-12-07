@@ -3,7 +3,6 @@ import { TaskCalculator } from '../TaskCalculator';
 describe('TaskCalculator', () => {
 	let calculator: TaskCalculator;
 	let mockRepo: any;
-	let mockDepMgr: any;
 
 	beforeEach(() => {
 		mockRepo = {
@@ -11,8 +10,7 @@ describe('TaskCalculator', () => {
 			findDescendants: jest.fn(),
 			findAll: jest.fn(),
 		};
-		mockDepMgr = {};
-		calculator = new TaskCalculator(mockRepo, mockDepMgr);
+		calculator = new TaskCalculator(mockRepo);
 	});
 
 	// ===== getTaskCompleteness Tests =====
@@ -865,7 +863,7 @@ describe('TaskCalculator', () => {
 		mockRepo.findById.mockResolvedValue(task);
 		const result = await calculator.getActualVsEstimated(1);
 		expect(result).toEqual({
-			estimatedDurationHour: null,
+			estimatedDurationHour: undefined,
 			actualDurationHour: null,
 			deltaHour: null,
 			deltaPercent: null,

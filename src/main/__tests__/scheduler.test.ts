@@ -135,7 +135,13 @@ describe('Scheduler', () => {
 
 	it('should handle missing estimateDurationHour via fallback', async () => {
 		const tasks: Task[] = [
-			{ id: 3, title: 'Fallback', estimateDurationHour: undefined as any, priority: 2, isSplittable: false } as any,
+			{
+				id: 3,
+				title: 'Fallback',
+				estimateDurationHour: undefined as any,
+				priority: 2,
+				isSplittable: false,
+			} as any,
 		];
 		(taskCalculator.getTaskUrgency as jest.Mock).mockResolvedValue(4);
 

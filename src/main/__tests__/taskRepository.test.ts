@@ -24,7 +24,7 @@ describe('TaskRepository', () => {
 			},
 		};
 		repo = new TaskRepository();
-		// @ts-ignore
+		// @ts-ignore ormRepository is private property
 		repo.ormRepository = mockOrmRepo;
 	});
 

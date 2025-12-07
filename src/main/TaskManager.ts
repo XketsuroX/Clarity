@@ -1,5 +1,4 @@
 import { ITaskJSON, Task } from './Task';
-import { CategoryManager, categoryManager } from './CategoryManager';
 import { CreateTaskData, TaskRepository, UpdateTaskData } from './TaskRepository';
 import { TaskDependencyManager } from './TaskDependencyManager';
 import { TaskCalculator } from './TaskCalculator';
@@ -7,7 +6,6 @@ import { ErrorHandler, Result } from './ErrorHandler';
 
 export class TaskManager {
 	private readonly taskRepository: TaskRepository;
-	private readonly categoryManager: CategoryManager;
 	private readonly dependencyManager: TaskDependencyManager;
 	private readonly calculator: TaskCalculator;
 	private readonly errorHandler: ErrorHandler;
@@ -22,11 +20,10 @@ export class TaskManager {
 		return this.errorHandler.wrapAsync(fn, notFoundMsg);
 	}
 
-	constructor(injectedCategoryManager?: CategoryManager) {
+	constructor() {
 		this.taskRepository = new TaskRepository();
-		this.categoryManager = injectedCategoryManager ?? categoryManager;
 		this.dependencyManager = new TaskDependencyManager(this.taskRepository);
-		this.calculator = new TaskCalculator(this.taskRepository, this.dependencyManager);
+		this.calculator = new TaskCalculator(this.taskRepository);
 		this.errorHandler = new ErrorHandler();
 	}
 

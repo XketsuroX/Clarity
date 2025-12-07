@@ -23,7 +23,7 @@ export class TaskDependencyManager {
 
 		let currentId: number | null = potentialParentId;
 
-		while (currentId !== null) {
+		while (currentId) {
 			if (currentId === childTaskId) return true;
 			const currentTask = await this.taskRepository.findById(currentId);
 			if (!currentTask || !currentTask.parentTask) break;

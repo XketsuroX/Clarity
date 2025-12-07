@@ -1,6 +1,5 @@
 import { Task } from './Task';
 import { TaskRepository } from './TaskRepository';
-import { TaskDependencyManager } from './TaskDependencyManager';
 
 /**
  * TaskCalculator handles time-based calculations and scheduling metrics.
@@ -8,12 +7,11 @@ import { TaskDependencyManager } from './TaskDependencyManager';
  */
 export class TaskCalculator {
 	private taskRepository: TaskRepository;
-	private dependencyManager: TaskDependencyManager;
 
 	// Error type thrown when scheduling cannot proceed
 	static SchedulingError = class SchedulingError extends Error {
 		code: string;
-		details?: any;
+		details?: unknown;
 		constructor(code: string, message: string, details?: unknown) {
 			super(message);
 			this.code = code;
@@ -22,9 +20,8 @@ export class TaskCalculator {
 		}
 	};
 
-	constructor(taskRepository: TaskRepository, dependencyManager?: TaskDependencyManager) {
+	constructor(taskRepository: TaskRepository) {
 		this.taskRepository = taskRepository;
-		this.dependencyManager = dependencyManager!;
 	}
 
 	/**
@@ -89,7 +86,7 @@ export class TaskCalculator {
 					// Non-completed tasks are always in valid states: 'In Progress', 'Scheduled', or 'Overdue'
 					const completeness = typeof d.completeness === 'number' ? d.completeness : 0;
 					const completed =
-						durValue * (Math.max(0, Math.min(100, completeness)) / 100);
+					durValue * (Math.max(0, Math.min(100, completeness)) / 100);
 					completedDescendantsDur += completed;
 				}
 			} else {
@@ -207,7 +204,7 @@ export class TaskCalculator {
 		if (!task)
 			throw new TaskCalculator.SchedulingError('NOT_FOUND', 'Task not found', { taskId });
 
-		const estimated = task.estimateDurationHour ?? null;
+		const estimated = task.estimateDurationHour;
 		const actual = task.actualDurationHour ?? null;
 		if (actual === null) {
 			return {
@@ -219,7 +216,7 @@ export class TaskCalculator {
 		}
 		let deltaHour: number | null = null;
 		let deltaPercent: number | null = null;
-		if (estimated !== null) {
+		if (estimated !== undefined && estimated !== null) {
 			deltaHour = Math.round((actual - estimated) * 100) / 100;
 			if (estimated !== 0) {
 				deltaPercent = Math.round(((actual - estimated) / estimated) * 10000) / 100; // two decimals percent

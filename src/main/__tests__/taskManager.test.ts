@@ -583,7 +583,7 @@ describe('TaskManager', () => {
 		} as any;
 		mockRepo.create.mockResolvedValue(child);
 		mockRepo.findById.mockResolvedValue(child);
-		mockRepo.reopenIfCompleted.mockResolvedValue(undefined);
+		mockRepo.reopenIfCompleted.mockResolvedValue(parent);
 
 		const result = await manager.addTask({ title: 'Child', parentTaskId: 1 });
 		expect(mockRepo.reopenIfCompleted).toHaveBeenCalledWith(1);
@@ -956,13 +956,6 @@ describe('TaskManager', () => {
 		// UTC time is consistent across timezones
 		const utcDate = new Date('2025-12-05T00:00:00.000Z');
 		expect(utcDate.toISOString()).toBe('2025-12-05T00:00:00.000Z');
-
-		const task = {
-			id: 1,
-			completed: false,
-			deadline: utcDate,
-			state: 'Scheduled',
-		} as any;
 
 		// Verify date is in the past relative to MOCK_DATE (10:00 UTC)
 		expect(utcDate.getTime()).toBeLessThan(MOCK_TIMESTAMP);
