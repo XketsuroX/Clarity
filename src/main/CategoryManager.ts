@@ -4,8 +4,8 @@ import { type ICategoryJSON } from './Category';
 export class CategoryManager {
 	private readonly categoryRepository: CategoryRepository;
 
-	constructor() {
-		this.categoryRepository = new CategoryRepository();
+	constructor(repository?: CategoryRepository) {
+		this.categoryRepository = repository ?? new CategoryRepository();
 	}
 
 	private async validateTitle(title: string, currentId?: number): Promise<string> {

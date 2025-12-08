@@ -29,4 +29,9 @@ export class Category {
 			title: this.title,
 		};
 	}
+
+	constructor(id: number, title: string) {
+		this.id = id;
+		this.title = title;
+	}
 }

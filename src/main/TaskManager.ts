@@ -20,8 +20,8 @@ export class TaskManager {
 		return this.errorHandler.wrapAsync(fn, notFoundMsg);
 	}
 
-	constructor() {
-		this.taskRepository = new TaskRepository();
+	constructor(repository?: TaskRepository) {
+		this.taskRepository = repository ?? new TaskRepository();
 		this.dependencyManager = new TaskDependencyManager(this.taskRepository);
 		this.calculator = new TaskCalculator(this.taskRepository);
 		this.errorHandler = new ErrorHandler();
