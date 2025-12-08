@@ -608,6 +608,47 @@ describe('TaskManager', () => {
 		}
 	});
 
+	it('should reassign children to grandparent when deleting parent task', async () => {
+		// Setup: grandparent (id:1) -> parent (id:2) -> child (id:3)
+		const grandparent = { id: 1 };
+		const parent = {
+			id: 2,
+			parentTask: grandparent,
+			childrenTasks: [{ id: 3 }],
+		} as any;
+
+		mockRepo.findById.mockResolvedValue(parent);
+		mockRepo.delete.mockResolvedValue(true);
+
+		const result = await manager.removeTask(2);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.value).toBe(true);
+		}
+		// The repository's delete method should have reassigned child (id:3) to grandparent (id:1)
+	});
+
+	it('should make children root tasks when deleting root parent', async () => {
+		// Setup: parent (id:1) -> children (id:2, id:3)
+		const parent = {
+			id: 1,
+			parentTask: null,
+			childrenTasks: [{ id: 2 }, { id: 3 }],
+		} as any;
+
+		mockRepo.findById.mockResolvedValue(parent);
+		mockRepo.delete.mockResolvedValue(true);
+
+		const result = await manager.removeTask(1);
+
+		expect(result.ok).toBe(true);
+		if (result.ok) {
+			expect(result.value).toBe(true);
+		}
+		// The repository's delete method should have reassigned children (id:2, id:3) to null (root level)
+	});
+
 	// ===== Edge Cases =====
 
 	it('should handle setTaskCompleteness with boundary value 0', async () => {

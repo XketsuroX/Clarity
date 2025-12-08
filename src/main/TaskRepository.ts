@@ -136,8 +136,23 @@ export class TaskRepository {
 
 	/**
 	 * Remove a task by ID
+	 * If the task has children, they will be reassigned to the task's parent (moving up one level)
 	 */
 	async delete(id: number): Promise<boolean> {
+		const task = await this.findById(id);
+		if (!task) return false;
+
+		// Get the parent ID before deletion (null if root task)
+		const newParentId = task.parentTask?.id ?? null;
+
+		// Reassign all children to the deleted task's parent
+		if (task.childrenTasks && task.childrenTasks.length > 0) {
+			for (const child of task.childrenTasks) {
+				await this.update(child.id, { parentTaskId: newParentId });
+			}
+		}
+
+		// Now delete the task
 		const result = await this.ormRepository.delete(id);
 		return !!result.affected;
 	}
