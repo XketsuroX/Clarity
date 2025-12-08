@@ -46,10 +46,8 @@ import {
 import { TagJSON, TagCreateParam, TagUpdateParam, TagIdParam } from '../../shared/TagTypes';
 import { ScheduleGenerateParams, ScheduleItem } from 'src/shared/SchedulerTypes';
 
-type TaskWithCompleteness = TaskJSON & { completeness?: number };
-
 // --- State ---
-const tasks = ref<TaskWithCompleteness[]>([]);
+const tasks = ref<TaskJSON[]>([]);
 const categories = ref<CategoryJSON[]>([]);
 const tags = ref<TagJSON[]>([]);
 const loading = ref(false);
@@ -59,7 +57,7 @@ const showManageModal = ref(false);
 const showTaskDetailModal = ref(false);
 const showStatsModal = ref(false);
 const statsData = ref<{ avgDeltaHour: number; avgDeltaPercent: number; count: number } | null>(null);
-const currentTask = ref<TaskWithCompleteness | null>(null);
+const currentTask = ref<TaskJSON | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null);
 const editingTag = ref<TagUpdateParam | null>(null);
 const newSubtaskTitle = ref('');
@@ -80,7 +78,7 @@ const newTagForm = ref<TagCreateParam>({ name: '', color: '#409EFF' });
 const activeCollapseItems = ref<(string | number)[]>(['uncategorized']);
 
 const groupedTasks = computed(() => {
-	const groups: { id: number | string; title: string; tasks: TaskWithCompleteness[] }[] = [];
+	const groups: { id: number | string; title: string; tasks: TaskJSON[] }[] = [];
 
 	const rootTasks = tasks.value.filter((t) => !t.parentTaskId);
 
@@ -160,7 +158,7 @@ const loadData = async (): Promise<void> => {
 			fetchCategories(),
 			fetchTags(),
 		]);
-		tasks.value = tasksData as TaskWithCompleteness[];
+		tasks.value = tasksData as TaskJSON[];
 		categories.value = catsData;
 		tags.value = tagsData;
 	} catch (err) {
@@ -294,7 +292,7 @@ const handleDeleteCategory = async (id: number): Promise<void> => {
 };
 
 // --- Actions: Task Detail & Operations ---
-const openTaskDetail = (task: TaskWithCompleteness): void => {
+const openTaskDetail = (task: TaskJSON): void => {
 	currentTask.value = JSON.parse(JSON.stringify(task));
 	showTaskDetailModal.value = true;
 };
@@ -325,7 +323,7 @@ const handleSaveTaskDetail = async (): Promise<void> => {
 				taskId: currentTask.value.id,
 				completeness: newCompleteness,
 			});
-			(updated as TaskWithCompleteness).completeness = newCompleteness;
+			(updated as TaskJSON).completeness = newCompleteness;
 		}
 
 		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));

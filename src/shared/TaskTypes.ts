@@ -5,6 +5,7 @@ export interface TaskJSON {
 	description?: string;
 	deadline?: string; // ISO 字串
 	completed: boolean;
+	completeness?: number;
 	estimateDurationHour?: number;
 	actualDurationHour?: number;
 	priority?: number;
