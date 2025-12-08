@@ -229,6 +229,14 @@ export class TaskManager {
 			const before = await this.taskRepository.findById(id);
 			const beforeParentId = before?.parentTask?.id ?? null;
 			const updatedTask = await this.taskRepository.update(id, data);
+
+			if (data.categoryId !== undefined) {
+				const descendants = await this.dependencyManager.getAllDescendants(id);
+				for (const child of descendants) {
+					await this.taskRepository.update(child.id, { categoryId: data.categoryId });
+				}
+			}
+
 			// Refresh completeness aggregates after updating a task (parent, duration, etc.)
 			if (beforeParentId) await this.refreshCompleteness(beforeParentId);
 			await this.refreshCompleteness(id);
