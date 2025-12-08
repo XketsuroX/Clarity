@@ -12,7 +12,6 @@ import {
 	Delete,
 	Edit,
 	VideoPlay,
-	VideoPause,
 	ArrowRight,
 	Back,
 	DataAnalysis,
