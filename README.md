@@ -5,7 +5,7 @@ Clarity is a desktop task management application built with **Electron**, **Vue 
 > **Course:** CS3343 Software Engineering Practice
 > **Semester:** 2025/26 Sem A
 
-## ✨ Features
+## Features
 
 *   **Task Management**: Create, edit, and delete tasks with rich details (priority, duration, due date).
 *   **Smart Scheduling**: An algorithm-based scheduler that suggests what to work on next based on urgency and time capacity.
@@ -13,14 +13,14 @@ Clarity is a desktop task management application built with **Electron**, **Vue 
 *   **Categorization**: Organize tasks using Categories and Tags.
 *   **Data Persistence**: Local SQLite database storage using TypeORM.
 
-## 🛠 Tech Stack
+## Tech Stack
 
 *   **Core**: Electron, Node.js
 *   **Frontend**: Vue 3, TypeScript, Vite
 *   **Database**: SQLite, TypeORM
 *   **Testing**: Jest (Unit & Bottom-Up Integration Tests)
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -71,7 +71,7 @@ Run specific test file:
 npx jest src/main/__tests__/tagManager.test.ts
 ```
 
-### Project Structure
+## Project Structure
 ```
 src/
 ├── main/                 # Electron Main Process (Backend Logic)
