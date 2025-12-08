@@ -451,10 +451,14 @@ const handleRefreshOverdue = async (): Promise<void> => {
 
 const handleShowStats = async (): Promise<void> => {
 	try {
+		console.log('Fetching stats...');
 		const stats = await getAverageActualVsEstimated();
+		console.log('Stats received:', stats);
 		statsData.value = stats;
 		showStatsModal.value = true;
+		console.log('Modal should be visible now');
 	} catch (err) {
+		console.error('Stats error:', err);
 		ElMessage.error('Failed to fetch stats: ' + err);
 	}
 };
@@ -972,6 +976,9 @@ onMounted(() => {
 					<span class="stats-label">Avg Delta %</span>
 					<span class="stats-value">{{ statsData.avgDeltaPercent.toFixed(1) }}%</span>
 				</div>
+			</div>
+			<div v-else class="stats-container">
+				<el-empty description="No completed tasks with actual duration yet" />
 			</div>
 			<template #footer>
 				<span class="dialog-footer">
