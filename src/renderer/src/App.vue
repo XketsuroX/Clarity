@@ -16,6 +16,7 @@ import {
 	ArrowRight,
 	Back,
 	DataAnalysis,
+	Odometer,
 } from '@element-plus/icons-vue';
 import {
 	fetchTasks,
@@ -59,6 +60,7 @@ const showStatsModal = ref(false);
 const statsData = ref<{ avgDeltaHour: number; avgDeltaPercent: number; count: number } | null>(
 	null
 );
+const urgencyScores = ref<Record<number, number>>({});
 const currentTask = ref<TaskJSON | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null);
 const editingTag = ref<TagUpdateParam | null>(null);
@@ -151,6 +153,13 @@ const getTaskProgress = (taskId: number): number => {
 	return task?.completeness ?? 0;
 };
 
+const getUrgencyColor = (score: number): string => {
+	if (score >= 80) return '#F56C6C'; // Red
+	if (score >= 50) return '#E6A23C'; // Orange
+	if (score >= 20) return '#409EFF'; // Blue
+	return '#909399'; // Grey
+};
+
 // --- Actions ---
 const loadData = async (): Promise<void> => {
 	loading.value = true;
@@ -163,6 +172,24 @@ const loadData = async (): Promise<void> => {
 		tasks.value = tasksData as TaskJSON[];
 		categories.value = catsData;
 		tags.value = tagsData;
+
+		// Fetch urgency for active tasks
+		const urgencyPromises = tasks.value
+			.filter((t) => !t.completed)
+			.map(async (t) => {
+				try {
+					const res = await (window as any).electron.ipcRenderer.invoke(
+						'tasks:getUrgency',
+						{ taskId: t.id }
+					);
+					if (res && res.ok) {
+						urgencyScores.value[t.id] = res.value;
+					}
+				} catch (e) {
+					console.error(`Failed to fetch urgency for task ${t.id}`, e);
+				}
+			});
+		await Promise.all(urgencyPromises);
 	} catch (err) {
 		ElMessage.error(`Failed to load data: ${err}`);
 	} finally {
@@ -525,6 +552,22 @@ onMounted(() => {
 									class="meta-tag"
 								>
 									{{ tag.name }}
+								</el-tag>
+
+								<el-tag
+									v-if="!task.completed && urgencyScores[task.id] !== undefined"
+									size="small"
+									effect="dark"
+									class="meta-tag"
+									:style="{
+										backgroundColor: getUrgencyColor(urgencyScores[task.id]),
+										borderColor: getUrgencyColor(urgencyScores[task.id]),
+										color: '#ffffff',
+										fontWeight: 'bold',
+									}"
+								>
+									<el-icon style="margin-right: 3px"><Odometer /></el-icon>
+									{{ Math.round(urgencyScores[task.id]) }}
 								</el-tag>
 
 								<span v-if="task.deadline" class="meta-info">
