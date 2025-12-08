@@ -32,6 +32,7 @@ import {
 	updateTag,
 	deleteTag,
 	generateSchedule,
+	refreshOverdue,
 } from './api';
 import { TaskAddParams, TaskJSON, TaskUpdateParams } from '../../shared/TaskTypes';
 import {
@@ -384,6 +385,16 @@ const backToParentTask = (): void => {
 	}
 };
 
+const handleRefreshOverdue = async (): Promise<void> => {
+	try {
+		await refreshOverdue();
+		await loadData();
+		ElMessage.success('Overdue tasks refreshed');
+	} catch (err) {
+		ElMessage.error('Failed to refresh overdue tasks: ' + err);
+	}
+};
+
 const handleTaskDeleteWrapper = async (taskToDelete: TaskJSON): Promise<void> => {
 	try {
 		await removeTask({ taskId: taskToDelete.id });
@@ -408,7 +419,7 @@ onMounted(() => {
 				<span class="subtitle">Focus on what matters</span>
 			</div>
 			<div class="header-actions">
-				<el-button circle :icon="Refresh" @click="loadData" />
+				<el-button circle :icon="Refresh" @click="handleRefreshOverdue" />
 				<el-button circle :icon="Folder" @click="showManageModal = true" />
 				<el-button circle :icon="Lightning" @click="showScheduleModal = true" />
 				<el-button circle type="primary" :icon="Plus" @click="showCreateModal = true" />

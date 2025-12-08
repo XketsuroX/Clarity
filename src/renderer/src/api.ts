@@ -105,6 +105,10 @@ export async function generateSchedule(params: ScheduleGenerateParams): Promise<
 	return unwrapResult(result);
 }
 
+export async function refreshOverdue(): Promise<void> {
+	return await window.electron.ipcRenderer.invoke('tasks:refreshOverdue');
+}
+
 // Categories
 export async function fetchCategories(): Promise<CategoryJSON[]> {
 	return unwrapResult(await window.electron.ipcRenderer.invoke('categories:getAll'));
