@@ -14,9 +14,7 @@ describe('CategoryRepository', () => {
 			update: jest.fn(),
 			delete: jest.fn(),
 		};
-		repo = new CategoryRepository();
-		// 假設你的 CategoryRepository 有 ormRepository 屬性
-		(repo as any).ormRepository = mockOrmRepo;
+		repo = new CategoryRepository(mockOrmRepo);
 	});
 
 	it('should create and save a category', async () => {

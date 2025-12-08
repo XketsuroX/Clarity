@@ -24,9 +24,7 @@ describe('TaskRepository', () => {
 				getTreeRepository: jest.fn(() => mockTreeRepo),
 			},
 		};
-		repo = new TaskRepository();
-		// @ts-ignore ormRepository is private property
-		repo.ormRepository = mockOrmRepo;
+		repo = new TaskRepository(mockOrmRepo);
 	});
 
 	it('should find all tasks', async () => {

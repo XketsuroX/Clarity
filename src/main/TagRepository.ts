@@ -5,8 +5,8 @@ import { Tag } from './Tag';
 export class TagRepository {
 	private ormRepository: Repository<Tag>;
 
-	constructor() {
-		this.ormRepository = AppDataSource.getRepository(Tag);
+	constructor(mockOrmRepo?: Repository<Tag>) {
+		this.ormRepository = mockOrmRepo ?? AppDataSource.getRepository(Tag);
 	}
 
 	async getAllTags(): Promise<Tag[]> {
