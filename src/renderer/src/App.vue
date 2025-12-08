@@ -35,6 +35,7 @@ import {
 	generateSchedule,
 	refreshOverdue,
 	getAverageActualVsEstimated,
+	getEstimatedDuration,
 } from './api';
 import { TaskAddParams, TaskJSON, TaskUpdateParams } from '../../shared/TaskTypes';
 import {
@@ -60,6 +61,7 @@ const statsData = ref<{ avgDeltaHour: number; avgDeltaPercent: number; count: nu
 	null
 );
 const urgencyScores = ref<Record<number, number>>({});
+const estimatedDurations = ref<Record<number, number>>({});
 const currentTask = ref<TaskJSON | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null);
 const editingTag = ref<TagUpdateParam | null>(null);
@@ -173,22 +175,35 @@ const loadData = async (): Promise<void> => {
 		tags.value = tagsData;
 
 		// Fetch urgency for active tasks
-		const urgencyPromises = tasks.value
+		const taskDataPrefetch = tasks.value
 			.filter((t) => !t.completed)
 			.map(async (t) => {
 				try {
-					const res = await (window as any).electron.ipcRenderer.invoke(
+					// skipped logging into api.ts due to time, use direct ipcRenderer call
+					const urgencies = await (window as any).electron.ipcRenderer.invoke(
 						'tasks:getUrgency',
 						{ taskId: t.id }
 					);
-					if (res && res.ok) {
-						urgencyScores.value[t.id] = res.value;
+					if (urgencies && urgencies.ok) {
+						urgencyScores.value[t.id] = urgencies.value;
 					}
-				} catch (e) {
-					console.error(`Failed to fetch urgency for task ${t.id}`, e);
+
+					// handling estimated hours
+					const estimatedDuration = await getEstimatedDuration({ taskId: t.id });
+
+					console.log('ID:', t.id, 'Estimated Duration:', estimatedDuration);
+					if (typeof estimatedDuration === 'number') {
+						estimatedDurations.value[t.id] = estimatedDuration;
+					}
+				} catch (e: any) {
+					// If task is overdue, treat result as undefined (ignore error)
+					if (e?.toString().includes('overdue') || e?.message?.includes('overdue')) {
+						return;
+					}
+					console.error(`Failed to fetch datas for task ${t.id}`, e);
 				}
 			});
-		await Promise.all(urgencyPromises);
+		await Promise.all(taskDataPrefetch);
 	} catch (err) {
 		ElMessage.error(`Failed to load data: ${err}`);
 	} finally {
@@ -274,6 +289,7 @@ const handleToggleComplete = async (task: TaskJSON): Promise<void> => {
 	try {
 		const updated = await toggleTaskComplete({ taskId: task.id });
 		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
+		await loadData();
 		ElMessage.success(updated.completed ? 'Task completed' : 'Task reopened');
 	} catch (err) {
 		ElMessage.error('Update failed: ' + err);
@@ -373,7 +389,7 @@ const handleTaskDelete = async (): Promise<void> => {
 			type: 'warning',
 		});
 		await removeTask({ taskId: currentTask.value.id });
-		tasks.value = tasks.value.filter((t) => t.id !== currentTask.value!.id);
+		await loadData();
 		showTaskDetailModal.value = false;
 		ElMessage.success('Task deleted');
 	} catch (err) {
@@ -462,7 +478,7 @@ const handleShowStats = async (): Promise<void> => {
 const handleTaskDeleteWrapper = async (taskToDelete: TaskJSON): Promise<void> => {
 	try {
 		await removeTask({ taskId: taskToDelete.id });
-		tasks.value = tasks.value.filter((t) => t.id !== taskToDelete.id);
+		await loadData();
 		ElMessage.success('Subtask deleted');
 	} catch (err) {
 		ElMessage.error('Failed to delete subtask: ' + err);
@@ -577,6 +593,14 @@ onMounted(() => {
 								<span v-if="task.estimateDurationHour" class="meta-info">
 									<el-icon><Clock /></el-icon>
 									{{ task.estimateDurationHour }}h
+								</span>
+
+								<span
+									v-if="estimatedDurations[task.id] !== undefined"
+									class="meta-info"
+								>
+									Est.<el-icon><Clock /></el-icon>
+									{{ estimatedDurations[task.id].toFixed(1) }}h
 								</span>
 							</div>
 						</div>
@@ -912,9 +936,7 @@ onMounted(() => {
 							:disabled="currentTask.state === 'In Progress' || currentTask.completed"
 							@click="handleStartTask"
 						>
-							{{
-								currentTask.state === 'In Progress' ? 'In Progress' : 'Start Timer'
-							}}
+							{{ currentTask.state === 'In Progress' ? 'In Progress' : 'Start Task' }}
 						</el-button>
 
 						<el-button type="danger" plain :icon="Delete" @click="handleTaskDelete">
