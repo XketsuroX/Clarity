@@ -8,8 +8,8 @@ export class TagManager {
 	private tagRepository: TagRepository;
 	private availableTags: Tag[];
 
-	private constructor() {
-		this.tagRepository = new TagRepository();
+	constructor(repository?: TagRepository) {
+		this.tagRepository = repository ?? new TagRepository();
 		this.availableTags = [];
 		this.errorHandler = new ErrorHandler();
 	}

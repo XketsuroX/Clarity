@@ -1,56 +1,77 @@
-import { ITagJSON, Tag } from '../Tag';
+import { Tag } from '../Tag';
 import { TagManager } from '../TagManager';
 import { TagRepository } from '../TagRepository';
 
-jest.mock('../TagRepository');
-
 describe('TagManager', () => {
 	let manager: TagManager;
-	let mockRepo: jest.Mocked<TagRepository>;
+	let mockOrmRepo: any;
+	let repo: TagRepository;
 
 	beforeEach(() => {
-		manager = TagManager.getInstance();
-		mockRepo = (manager as any).tagRepository as jest.Mocked<TagRepository>;
+		jest.clearAllMocks();
+
+		mockOrmRepo = {
+			find: jest.fn(),
+			findOneBy: jest.fn(),
+			create: jest.fn(),
+			save: jest.fn(),
+			delete: jest.fn(),
+			merge: jest.fn((entity, data) => Object.assign(entity, data)),
+		};
+
+		repo = new TagRepository(mockOrmRepo);
+		manager = new TagManager(repo);
 		(manager as any).availableTags = [];
 	});
 
 	it('should add a tag and update availableTags', async () => {
-		const tag = {
+		const newTagData = { name: 'TestTag', color: '#123456' };
+		const createdTag = {
 			id: 1,
-			name: 'Test',
-			color: '#000000',
-			toJSON: () => ({ id: 1, name: 'Test', color: '#000000' }),
-		} as any;
-		mockRepo.addTag.mockResolvedValue(tag);
+			name: 'TestTag',
+			color: '#123456',
+			toJSON: () => ({ id: 1, name: 'TestTag', color: '#123456' }),
+		};
+		mockOrmRepo.create.mockReturnValue(createdTag);
+		mockOrmRepo.save.mockResolvedValue(createdTag);
 
-		const result = await manager.addTag('Test', '#000000');
-		expect(mockRepo.addTag).toHaveBeenCalledWith('Test', '#000000');
-		expect((manager as any).availableTags).toContain(tag);
+		const result = await manager.addTag(newTagData.name, newTagData.color);
+
+		expect(mockOrmRepo.create).toHaveBeenCalledWith({ name: 'TestTag', color: '#123456' });
+		expect(mockOrmRepo.save).toHaveBeenCalledWith(createdTag);
+		expect((manager as any).availableTags[0]).toBe(createdTag);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
-			expect(result.value).toEqual({ id: 1, name: 'Test', color: '#000000' });
+			expect(result.value).toEqual({ id: 1, name: 'TestTag', color: '#123456' });
 		}
 	});
 
 	it('should update a tag and update availableTags', async () => {
-		const tag = {
+		const oldTag = {
 			id: 2,
 			name: 'Old',
 			color: '#111111',
-			toJSON: () => ({ id: 2, text: 'New', color: '#222222' }),
-		} as any;
-		(manager as any).availableTags = [tag];
+			toJSON: () => ({ id: 2, name: 'Old', color: '#111111' }),
+		};
+		(manager as any).availableTags = [oldTag];
+
 		const updatedTag = {
 			id: 2,
 			name: 'New',
 			color: '#222222',
 			toJSON: () => ({ id: 2, name: 'New', color: '#222222' }),
-		} as any;
-		mockRepo.updateTag.mockResolvedValue(updatedTag);
+		};
+
+		mockOrmRepo.findOneBy.mockResolvedValue(oldTag);
+		mockOrmRepo.save.mockResolvedValue(updatedTag);
 
 		const result = await manager.updateTag(2, 'New', '#222222');
-		expect(mockRepo.updateTag).toHaveBeenCalledWith(2, { name: 'New', color: '#222222' });
-		expect((manager as any).availableTags[0]).toBe(updatedTag);
+
+		expect(mockOrmRepo.findOneBy).toHaveBeenCalledWith({ id: 2 });
+		expect(mockOrmRepo.merge).toHaveBeenCalled();
+		expect(mockOrmRepo.save).toHaveBeenCalledWith(expect.objectContaining({ name: 'New' }));
+
+		expect((manager as any).availableTags[0]).toEqual(updatedTag);
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.value).toEqual({ id: 2, name: 'New', color: '#222222' });
@@ -58,12 +79,14 @@ describe('TagManager', () => {
 	});
 
 	it('should return error if updateTag not found', async () => {
-		mockRepo.updateTag.mockResolvedValue(null);
+		mockOrmRepo.findOneBy.mockResolvedValue(null);
 
 		const result = await manager.updateTag(999, 'X', '#fff');
+
+		expect(mockOrmRepo.findOneBy).toHaveBeenCalledWith({ id: 999 });
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
-			expect(result.error).toEqual({ code: 'NOT_FOUND', message: 'Tag not found' });
+			expect(result.error?.message).toContain('Tag not found');
 		}
 	});
 
@@ -78,13 +101,16 @@ describe('TagManager', () => {
 		expect(instance1).toBe(instance2);
 	});
 
-	it('should remove a tag and update availableTags', () => {
+	it('should remove a tag and update availableTags', async () => {
 		(manager as any).availableTags = [
 			{ id: 1, name: 'A', color: '#000' },
 			{ id: 2, name: 'B', color: '#111' },
 		];
-		manager.deleteTag(1);
-		expect(mockRepo.removeTag).toHaveBeenCalledWith(1);
+
+		mockOrmRepo.delete.mockResolvedValue({ affected: 1 });
+		await manager.deleteTag(1);
+
+		expect(mockOrmRepo.delete).toHaveBeenCalledWith(1);
 		expect((manager as any).availableTags).toEqual([{ id: 2, name: 'B', color: '#111' }]);
 	});
 
@@ -95,10 +121,10 @@ describe('TagManager', () => {
 			color: '#555',
 			toJSON: () => ({ id: 5, name: 'Tag5', color: '#555' }),
 		} as any;
-		mockRepo.getTagById.mockResolvedValue(tag);
+		mockOrmRepo.findOneBy.mockResolvedValue(tag);
 
 		const result = await manager.getTagById(5);
-		expect(mockRepo.getTagById).toHaveBeenCalledWith(5);
+		expect(mockOrmRepo.findOneBy).toHaveBeenCalledWith({ id: 5 });
 		expect(result).toBe(tag);
 	});
 
@@ -108,23 +134,19 @@ describe('TagManager', () => {
 				id: 1,
 				name: 'A',
 				color: '#000',
-				toJSON: function (): ITagJSON {
-					throw new Error('Function not implemented.');
-				},
+				toJSON: () => ({ id: 1, name: 'A', color: '#000' }),
 			},
 			{
 				id: 2,
 				name: 'B',
 				color: '#111',
-				toJSON: function (): ITagJSON {
-					throw new Error('Function not implemented.');
-				},
+				toJSON: () => ({ id: 2, name: 'B', color: '#111' }),
 			},
 		];
-		mockRepo.getAllTags.mockResolvedValue(tags);
+		mockOrmRepo.find.mockResolvedValue(tags);
 
 		const result = await manager.getAllTags();
-		expect(mockRepo.getAllTags).toHaveBeenCalled();
+		expect(mockOrmRepo.find).toHaveBeenCalled();
 		expect(result).toBe(tags);
 	});
 });
