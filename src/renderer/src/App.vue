@@ -131,6 +131,17 @@ const formatDate = (date: string | Date | undefined): string => {
 	return new Date(date).toLocaleDateString('zh-TW', { month: 'short', day: 'numeric' });
 };
 
+const hasSubtasks = (taskId: number): boolean => {
+	return tasks.value.some((t) => t.parentTaskId === taskId);
+};
+
+const getTaskProgress = (taskId: number): number => {
+	const subtasks = tasks.value.filter((t) => t.parentTaskId === taskId);
+	if (subtasks.length === 0) return 0;
+	const completedCount = subtasks.filter((t) => t.completed).length;
+	return Math.round((completedCount / subtasks.length) * 100);
+};
+
 // --- Actions ---
 const loadData = async (): Promise<void> => {
 	loading.value = true;
@@ -462,6 +473,16 @@ onMounted(() => {
 
 						<div class="task-content">
 							<div class="task-title">{{ task.title }}</div>
+							<div v-if="hasSubtasks(task.id)" class="task-progress-row">
+								<el-progress
+									:percentage="getTaskProgress(task.id)"
+									:stroke-width="5"
+									:show-text="false"
+									:status="getTaskProgress(task.id) === 100 ? 'success' : ''"
+									style="width: 60px"
+								/>
+								<span class="progress-text">{{ getTaskProgress(task.id) }}%</span>
+							</div>
 							<div class="task-meta">
 								<el-tag
 									v-for="tag in getTaskTags(task.tagIds)"
@@ -947,6 +968,17 @@ body {
 	color: var(--el-text-color-primary);
 }
 
+.task-progress-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.progress-text {
+	font-size: 0.75rem;
+	color: var(--el-text-color-secondary);
+}
 .subtitle {
 	font-size: 0.85rem;
 	color: var(--el-text-color-secondary);
