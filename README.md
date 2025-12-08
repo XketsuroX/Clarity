@@ -58,6 +58,9 @@ To package the application into an executable (.exe):
 
 The output installer will be located in the `dist` directory.
 
+> If you want want to build the executable, enter clarity folder in command line, if you are using Windows run powershell with admin permission. Run `npm run build && electron-builder --win portable`.
+>  change `--win` into your os distro if you are using macOS or Linux. Please run the command with sudo if you are using the above Operating Systems. After build, the executable will appears in dist folder. 
+
 ### Testing
 This project uses Jest for testing. We follow a Bottom-Up Integration Testing strategy.
 
