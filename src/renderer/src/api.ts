@@ -152,6 +152,10 @@ export async function getAverageActualVsEstimated(): Promise<{
 	const result = await window.electron.ipcRenderer.invoke('tasks:getAverageActualVsEstimated');
 	return unwrapResult(result);
 }
+
+export async function getEstimatedDuration(id: TaskIdParam): Promise<number> {
+	return unwrapResult(await window.electron.ipcRenderer.invoke('tasks:getEstimatedDuration', id));
+}
 // Helper function: unwrap the Result structure returned by the backend (if any)
 // function unwrapResult(res: any) {
 // 	if (res && res.error) throw new Error(res.error.message);

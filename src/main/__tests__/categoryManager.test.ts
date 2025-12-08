@@ -2,7 +2,7 @@ import { Category } from '../Category';
 import { CategoryManager } from '../CategoryManager';
 import { CategoryRepository } from '../CategoryRepository';
 
-describe('CategoryManager (Bottom-Up Integration)', () => {
+describe('CategoryManager', () => {
 	let manager: CategoryManager;
 	let repo: CategoryRepository;
 	let mockOrmRepo: any;
