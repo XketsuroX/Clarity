@@ -15,6 +15,7 @@ import {
 	VideoPause,
 	ArrowRight,
 	Back,
+	DataAnalysis,
 } from '@element-plus/icons-vue';
 import {
 	fetchTasks,
@@ -33,6 +34,7 @@ import {
 	deleteTag,
 	generateSchedule,
 	refreshOverdue,
+	getAverageActualVsEstimated,
 } from './api';
 import { TaskAddParams, TaskJSON, TaskUpdateParams } from '../../shared/TaskTypes';
 import {
@@ -53,6 +55,8 @@ const showCreateModal = ref(false);
 const showScheduleModal = ref(false);
 const showManageModal = ref(false);
 const showTaskDetailModal = ref(false);
+const showStatsModal = ref(false);
+const statsData = ref<{ avgDeltaHour: number; avgDeltaPercent: number; count: number } | null>(null);
 const currentTask = ref<TaskJSON | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null); // 用於編輯分類
 const editingTag = ref<TagUpdateParam | null>(null);
@@ -406,6 +410,16 @@ const handleRefreshOverdue = async (): Promise<void> => {
 	}
 };
 
+const handleShowStats = async (): Promise<void> => {
+	try {
+		const stats = await getAverageActualVsEstimated();
+		statsData.value = stats;
+		showStatsModal.value = true;
+	} catch (err) {
+		ElMessage.error('Failed to fetch stats: ' + err);
+	}
+};
+
 const handleTaskDeleteWrapper = async (taskToDelete: TaskJSON): Promise<void> => {
 	try {
 		await removeTask({ taskId: taskToDelete.id });
@@ -431,6 +445,7 @@ onMounted(() => {
 			</div>
 			<div class="header-actions">
 				<el-button circle :icon="Refresh" @click="handleRefreshOverdue" />
+				<el-button circle :icon="DataAnalysis" @click="handleShowStats" />
 				<el-button circle :icon="Folder" @click="showManageModal = true" />
 				<el-button circle :icon="Lightning" @click="showScheduleModal = true" />
 				<el-button circle type="primary" :icon="Plus" @click="showCreateModal = true" />
@@ -875,6 +890,29 @@ onMounted(() => {
 				</div>
 			</div>
 		</el-dialog>
+
+		<!-- Stats Modal -->
+		<el-dialog v-model="showStatsModal" title="Estimation Accuracy" width="400px" align-center>
+			<div v-if="statsData" class="stats-container">
+				<div class="stats-item">
+					<span class="stats-label">Completed Tasks</span>
+					<span class="stats-value">{{ statsData.count }}</span>
+				</div>
+				<div class="stats-item">
+					<span class="stats-label">Avg Delta Time</span>
+					<span class="stats-value">{{ statsData.avgDeltaHour.toFixed(2) }}h</span>
+				</div>
+				<div class="stats-item">
+					<span class="stats-label">Avg Delta %</span>
+					<span class="stats-value">{{ statsData.avgDeltaPercent.toFixed(1) }}%</span>
+				</div>
+			</div>
+			<template #footer>
+				<span class="dialog-footer">
+					<el-button type="primary" @click="showStatsModal = false">Close</el-button>
+				</span>
+			</template>
+		</el-dialog>
 	</div>
 </template>
 
@@ -1231,5 +1269,34 @@ body {
 	background-color: var(--el-color-primary);
 	border-color: var(--el-color-primary);
 	color: white;
+}
+
+.stats-container {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	padding: 20px 0;
+}
+
+.stats-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px;
+	background-color: var(--el-fill-color-lighter);
+	border-radius: 4px;
+	border-left: 4px solid var(--el-color-primary);
+}
+
+.stats-label {
+	font-size: 0.9rem;
+	color: var(--el-text-color-secondary);
+	font-weight: 500;
+}
+
+.stats-value {
+	font-size: 1.3rem;
+	font-weight: 600;
+	color: var(--el-color-primary);
 }
 </style>
