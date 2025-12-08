@@ -14,7 +14,6 @@ import {
 	VideoPlay,
 	ArrowRight,
 	Back,
-	DataAnalysis,
 	Odometer,
 } from '@element-plus/icons-vue';
 import {
@@ -34,7 +33,6 @@ import {
 	deleteTag,
 	generateSchedule,
 	refreshOverdue,
-	getAverageActualVsEstimated,
 	getEstimatedDuration,
 } from './api';
 import { TaskAddParams, TaskJSON, TaskUpdateParams } from '../../shared/TaskTypes';
@@ -56,10 +54,6 @@ const showCreateModal = ref(false);
 const showScheduleModal = ref(false);
 const showManageModal = ref(false);
 const showTaskDetailModal = ref(false);
-const showStatsModal = ref(false);
-const statsData = ref<{ avgDeltaHour: number; avgDeltaPercent: number; count: number } | null>(
-	null
-);
 const urgencyScores = ref<Record<number, number>>({});
 const estimatedDurations = ref<Record<number, number>>({});
 const currentTask = ref<TaskJSON | null>(null);
@@ -465,20 +459,6 @@ const handleRefreshOverdue = async (): Promise<void> => {
 	}
 };
 
-const handleShowStats = async (): Promise<void> => {
-	try {
-		console.log('Fetching stats...');
-		const stats = await getAverageActualVsEstimated();
-		console.log('Stats received:', stats);
-		statsData.value = stats;
-		showStatsModal.value = true;
-		console.log('Modal should be visible now');
-	} catch (err) {
-		console.error('Stats error:', err);
-		ElMessage.error('Failed to fetch stats: ' + err);
-	}
-};
-
 const handleTaskDeleteWrapper = async (taskToDelete: TaskJSON): Promise<void> => {
 	try {
 		await removeTask({ taskId: taskToDelete.id });
@@ -504,7 +484,6 @@ onMounted(() => {
 			</div>
 			<div class="header-actions">
 				<el-button circle :icon="Refresh" @click="handleRefreshOverdue" />
-				<el-button circle :icon="DataAnalysis" @click="handleShowStats" />
 				<el-button circle :icon="Folder" @click="showManageModal = true" />
 				<el-button circle :icon="Lightning" @click="showScheduleModal = true" />
 				<el-button circle type="primary" :icon="Plus" @click="showCreateModal = true" />
@@ -981,32 +960,6 @@ onMounted(() => {
 					</div>
 				</div>
 			</div>
-		</el-dialog>
-
-		<!-- Stats Modal -->
-		<el-dialog v-model="showStatsModal" title="Estimation Accuracy" width="400px" align-center>
-			<div v-if="statsData" class="stats-container">
-				<div class="stats-item">
-					<span class="stats-label">Completed Tasks</span>
-					<span class="stats-value">{{ statsData.count }}</span>
-				</div>
-				<div class="stats-item">
-					<span class="stats-label">Avg Delta Time</span>
-					<span class="stats-value">{{ statsData.avgDeltaHour.toFixed(2) }}h</span>
-				</div>
-				<div class="stats-item">
-					<span class="stats-label">Avg Delta %</span>
-					<span class="stats-value">{{ statsData.avgDeltaPercent.toFixed(1) }}%</span>
-				</div>
-			</div>
-			<div v-else class="stats-container">
-				<el-empty description="No completed tasks with actual duration yet" />
-			</div>
-			<template #footer>
-				<span class="dialog-footer">
-					<el-button type="primary" @click="showStatsModal = false">Close</el-button>
-				</span>
-			</template>
 		</el-dialog>
 	</div>
 </template>
