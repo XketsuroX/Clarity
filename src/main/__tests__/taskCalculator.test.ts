@@ -562,12 +562,13 @@ describe('TaskCalculator', () => {
 		expect(result).toBe(0);
 	});
 
-	it('should skip non-in-progress parent task duration', async () => {
+	it('should include scheduled parent task duration with completeness', async () => {
 		const parent = {
 			id: 1,
 			state: 'Scheduled',
 			completed: false,
 			estimateDurationHour: 5,
+			completeness: 0,
 		};
 		const child = {
 			id: 2,
@@ -580,7 +581,7 @@ describe('TaskCalculator', () => {
 		mockRepo.findById.mockResolvedValue(parent);
 		mockRepo.findDescendants.mockResolvedValue([parent, child]);
 		const result = await calculator.estimatedTaskDuration(1);
-		expect(result).toBe(3); // Only child duration, not parent
+		expect(result).toBe(8); // Both parent (5) and child (3) included
 	});
 
 	it('should throw MISSING_DURATION if non-leaf missing estimate', async () => {
@@ -1269,6 +1270,7 @@ describe('TaskCalculator', () => {
 			completed: false,
 			estimateDurationHour: 10,
 			state: 'Scheduled',
+			completeness: 0,
 			childrenTasks: [{ id: 2 }],
 		};
 		const child = {
@@ -1282,7 +1284,7 @@ describe('TaskCalculator', () => {
 		mockRepo.findById.mockResolvedValue(parent);
 		mockRepo.findDescendants.mockResolvedValue([parent, child]);
 		const result = await calculator.estimatedTaskDuration(1);
-		expect(result).toBe(2.5); // Only child: 5 * (1 - 0.5) = 2.5
+		expect(result).toBe(12.5); // Parent: 10 * (1 - 0) + Child: 5 * (1 - 0.5) = 10 + 2.5 = 12.5
 	});
 
 	it('should handle completeness rounding edge case (49.5%)', async () => {
