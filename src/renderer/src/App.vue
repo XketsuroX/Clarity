@@ -1208,6 +1208,15 @@ body {
 .meta-tag {
 	font-weight: 500;
 	border: 1px solid transparent;
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	white-space: nowrap;
+}
+
+.meta-tag :deep(.el-tag__content) {
+	display: inline-flex;
+	align-items: center;
 }
 
 /* Form Layout */
