@@ -416,7 +416,7 @@ const handleRefreshOverdue = async (): Promise<void> => {
 	try {
 		await refreshOverdue();
 		await loadData();
-		ElMessage.success('Overdue tasks refreshed');
+		ElMessage.success('Tasks refreshed');
 	} catch (err) {
 		ElMessage.error('Failed to refresh overdue tasks: ' + err);
 	}
