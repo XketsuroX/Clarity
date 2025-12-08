@@ -116,6 +116,8 @@ describe('TaskRepository', () => {
 	});
 
 	it('should delete a task', async () => {
+		const task = { id: 1, parentTask: null, childrenTasks: [] };
+		mockOrmRepo.findOne.mockResolvedValue(task);
 		mockOrmRepo.delete.mockResolvedValue({ affected: 1 });
 		const result = await repo.delete(1);
 		expect(mockOrmRepo.delete).toHaveBeenCalledWith(1);
@@ -123,6 +125,8 @@ describe('TaskRepository', () => {
 	});
 
 	it('should return false if delete not affected', async () => {
+		const task = { id: 1, parentTask: null, childrenTasks: [] };
+		mockOrmRepo.findOne.mockResolvedValue(task);
 		mockOrmRepo.delete.mockResolvedValue({ affected: 0 });
 		const result = await repo.delete(1);
 		expect(result).toBe(false);
