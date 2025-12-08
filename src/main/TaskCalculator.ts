@@ -323,8 +323,8 @@ export class TaskCalculator {
 				for (const c of childIds) {
 					total += computeRemaining(c);
 				}
-				// include this task's own remaining duration only if it's In Progress
-				if (t.state === 'In Progress') {
+				// include this task's own remaining duration if it's In Progress or Scheduled
+				if (t.state === 'In Progress' || t.state === 'Scheduled') {
 					const est = t.estimateDurationHour;
 					if (!est || est <= 0)
 						throw new TaskCalculator.SchedulingError(
