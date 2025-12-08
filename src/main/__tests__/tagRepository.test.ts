@@ -14,9 +14,7 @@ describe('TagRepository', () => {
 			merge: jest.fn(),
 			delete: jest.fn(),
 		};
-		repo = new TagRepository();
-		// @ts-ignore
-		repo.ormRepository = mockOrmRepo;
+		repo = new TagRepository(mockOrmRepo);
 	});
 
 	it('should get all tags', async () => {

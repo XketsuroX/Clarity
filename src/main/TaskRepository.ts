@@ -46,8 +46,8 @@ export interface UpdateTaskData {
 export class TaskRepository {
 	private ormRepository: Repository<Task>;
 
-	constructor() {
-		this.ormRepository = AppDataSource.getRepository(Task);
+	constructor(mockOrmRepo?: Repository<Task>) {
+		this.ormRepository = mockOrmRepo ?? AppDataSource.getRepository(Task);
 	}
 
 	/**

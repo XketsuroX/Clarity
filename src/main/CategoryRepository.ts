@@ -5,8 +5,8 @@ import { AppDataSource } from './Database';
 export class CategoryRepository {
 	private readonly ormRepository: Repository<Category>;
 
-	constructor() {
-		this.ormRepository = AppDataSource.getRepository(Category);
+	constructor(mockOrmRepo?: Repository<Category>) {
+		this.ormRepository = mockOrmRepo ?? AppDataSource.getRepository(Category);
 	}
 
 	async create(title: string): Promise<Category> {
