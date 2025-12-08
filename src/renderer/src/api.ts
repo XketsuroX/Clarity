@@ -91,7 +91,7 @@ export async function removeTask(id: TaskIdParam): Promise<void> {
 }
 
 export async function toggleTaskStart(id: TaskIdParam): Promise<TaskJSON> {
-	return await window.electron.ipcRenderer.invoke('tasks:toggleStart', id);
+	return unwrapResult(await window.electron.ipcRenderer.invoke('tasks:toggleStart', id));
 }
 
 export async function toggleTaskComplete(id: TaskIdParam): Promise<TaskJSON> {

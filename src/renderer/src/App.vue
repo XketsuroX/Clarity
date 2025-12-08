@@ -56,7 +56,9 @@ const showScheduleModal = ref(false);
 const showManageModal = ref(false);
 const showTaskDetailModal = ref(false);
 const showStatsModal = ref(false);
-const statsData = ref<{ avgDeltaHour: number; avgDeltaPercent: number; count: number } | null>(null);
+const statsData = ref<{ avgDeltaHour: number; avgDeltaPercent: number; count: number } | null>(
+	null
+);
 const currentTask = ref<TaskJSON | null>(null);
 const editingCategory = ref<{ id: number; title: string } | null>(null);
 const editingTag = ref<TagUpdateParam | null>(null);
@@ -353,15 +355,16 @@ const handleTaskDelete = async (): Promise<void> => {
 	}
 };
 
-const handleToggleStart = async (): Promise<void> => {
+const handleStartTask = async (): Promise<void> => {
 	if (!currentTask.value) return;
 	try {
 		const updated = await toggleTaskStart({ taskId: currentTask.value.id });
-		currentTask.value = updated;
+		console.log('Task started:', updated);
+		currentTask.value.state = updated.state;
 		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
-		ElMessage.success(updated.state === 'In Progress' ? 'Task started' : 'Task paused');
+		ElMessage.success('Task started');
 	} catch (err) {
-		ElMessage.error('Failed to toggle start: ' + err);
+		ElMessage.error('Failed to start task: ' + err);
 	}
 };
 
@@ -865,7 +868,7 @@ onMounted(() => {
 							:type="currentTask.state === 'In Progress' ? 'info' : 'success'"
 							:icon="VideoPlay"
 							:disabled="currentTask.state === 'In Progress' || currentTask.completed"
-							@click="handleToggleStart"
+							@click="handleStartTask"
 						>
 							{{
 								currentTask.state === 'In Progress' ? 'In Progress' : 'Start Timer'
