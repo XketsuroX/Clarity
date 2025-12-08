@@ -141,11 +141,14 @@ const hasSubtasks = (taskId: number): boolean => {
 const getTaskProgress = (taskId: number): number => {
 	const subtasks = tasks.value.filter((t) => t.parentTaskId === taskId);
 	if (subtasks.length === 0) {
+		// Leaf task: return persisted completeness value
 		const task = tasks.value.find((t) => t.id === taskId);
 		return task?.completeness ?? 0;
 	}
-	const completedCount = subtasks.filter((t) => t.completed).length;
-	return Math.round((completedCount / subtasks.length) * 100);
+	// Non-leaf task: backend calculates this based on descendants
+	// Frontend displays the completeness value from backend
+	const task = tasks.value.find((t) => t.id === taskId);
+	return task?.completeness ?? 0;
 };
 
 // --- Actions ---
