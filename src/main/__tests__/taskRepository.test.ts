@@ -15,6 +15,7 @@ describe('TaskRepository', () => {
 			findOne: jest.fn(),
 			create: jest.fn(),
 			save: jest.fn(),
+			remove: jest.fn(),
 			delete: jest.fn(),
 			count: jest.fn(),
 			existsBy: jest.fn(),
@@ -118,17 +119,16 @@ describe('TaskRepository', () => {
 	it('should delete a task', async () => {
 		const task = { id: 1, parentTask: null, childrenTasks: [] };
 		mockOrmRepo.findOne.mockResolvedValue(task);
-		mockOrmRepo.delete.mockResolvedValue({ affected: 1 });
+		mockOrmRepo.remove.mockResolvedValue(task);
 		const result = await repo.delete(1);
-		expect(mockOrmRepo.delete).toHaveBeenCalledWith(1);
+		expect(mockOrmRepo.remove).toHaveBeenCalledWith(task);
 		expect(result).toBe(true);
 	});
 
-	it('should return false if delete not affected', async () => {
-		const task = { id: 1, parentTask: null, childrenTasks: [] };
-		mockOrmRepo.findOne.mockResolvedValue(task);
-		mockOrmRepo.delete.mockResolvedValue({ affected: 0 });
+	it('should return false when deleting a non-existent task', async () => {
+		mockOrmRepo.findOne.mockResolvedValue(null);
 		const result = await repo.delete(1);
+		expect(mockOrmRepo.remove).not.toHaveBeenCalled();
 		expect(result).toBe(false);
 	});
 
