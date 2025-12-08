@@ -243,7 +243,7 @@ export class TaskRepository {
 		const task = await this.findById(id);
 		if (!task) return null;
 		if (!task.completed) return task;
-		this.ormRepository.merge(task, { completed: false, state: 'In Progress' });
+		this.ormRepository.merge(task, { completed: false, state: 'In Progress', completeness: 0 });
 		return this.ormRepository.save(task);
 	}
 
