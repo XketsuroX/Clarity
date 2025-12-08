@@ -78,25 +78,27 @@ export class TaskRepository {
 	 */
 	async create(data: CreateTaskData): Promise<Task> {
 		const { categoryId, tagIds, parentTaskId, state, ...taskData } = data;
-		const taskToCreate: DeepPartial<Task> = { ...taskData };
+		const task = this.ormRepository.create(taskData);
 
-		if (state && !this.validateState(state)) {
-			throw new Error('Invalid task state');
+		if (state) {
+			if (!this.validateState(state)) {
+				throw new Error(`Invalid task state: ${state}`);
+			}
+			task.state = state;
 		}
 
 		if (categoryId) {
-			taskToCreate.category = { id: categoryId };
+			task.category = { id: categoryId } as Category;
 		}
 
 		if (parentTaskId) {
-			taskToCreate.parentTask = { id: parentTaskId };
+			task.parentTask = { id: parentTaskId } as Task;
 		}
 
 		if (tagIds && tagIds.length > 0) {
-			taskToCreate.tags = tagIds.map((id) => ({ id }));
+			task.tags = tagIds.map((id) => ({ id })) as Tag[];
 		}
 
-		const task = this.ormRepository.create(taskToCreate);
 		return this.ormRepository.save(task);
 	}
 
@@ -104,34 +106,30 @@ export class TaskRepository {
 	 * Update an existing task
 	 */
 	async update(id: number, data: UpdateTaskData): Promise<Task | null> {
-		const { categoryId, tagIds, parentTaskId, state, ...taskUpdates } = data;
+		const task = await this.findById(id);
+		if (!task) return null;
 
-		const taskToUpdate = await this.findById(id);
-		if (!taskToUpdate) {
-			return null;
+		if (data.state && !this.validateState(data.state)) {
+			throw new Error(`Invalid task state: ${data.state}`);
 		}
 
-		if (state && !this.validateState(state)) {
-			throw new Error('Invalid task state');
+		this.ormRepository.merge(task, data);
+
+		if (data.parentTaskId !== undefined) {
+			const pId = data.parentTaskId;
+			task.parentTask = pId === null ? null : ({ id: pId } as Task);
 		}
 
-		const payload: DeepPartial<Task> = { ...taskUpdates };
-
-		if (categoryId !== undefined) {
-			taskToUpdate.category =
-				categoryId === null ? null : ({ id: categoryId } as unknown as Category);
+		if (data.categoryId !== undefined) {
+			const cId = data.categoryId;
+			task.category = cId === null ? null : ({ id: cId } as Category);
 		}
 
-		if (parentTaskId !== undefined) {
-			payload.parentTask = parentTaskId === null ? null : { id: parentTaskId };
+		if (data.tagIds !== undefined) {
+			task.tags = data.tagIds.map((tagId) => ({ id: tagId })) as Tag[];
 		}
 
-		if (tagIds !== undefined) {
-			taskToUpdate.tags = tagIds.map((tagId) => ({ id: tagId })) as unknown as Tag[];
-		}
-
-		this.ormRepository.merge(taskToUpdate, payload);
-		return this.ormRepository.save(taskToUpdate);
+		return this.ormRepository.save(task);
 	}
 
 	/**
@@ -153,8 +151,8 @@ export class TaskRepository {
 		}
 
 		// Now delete the task
-		const result = await this.ormRepository.delete(id);
-		return !!result.affected;
+		await this.ormRepository.remove(task);
+		return true;
 	}
 
 	/**
