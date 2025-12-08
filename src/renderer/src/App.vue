@@ -46,8 +46,10 @@ import {
 import { TagJSON, TagCreateParam, TagUpdateParam, TagIdParam } from '../../shared/TagTypes';
 import { ScheduleGenerateParams, ScheduleItem } from 'src/shared/SchedulerTypes';
 
+type TaskWithCompleteness = TaskJSON & { completeness?: number };
+
 // --- State ---
-const tasks = ref<TaskJSON[]>([]);
+const tasks = ref<TaskWithCompleteness[]>([]);
 const categories = ref<CategoryJSON[]>([]);
 const tags = ref<TagJSON[]>([]);
 const loading = ref(false);
@@ -57,8 +59,8 @@ const showManageModal = ref(false);
 const showTaskDetailModal = ref(false);
 const showStatsModal = ref(false);
 const statsData = ref<{ avgDeltaHour: number; avgDeltaPercent: number; count: number } | null>(null);
-const currentTask = ref<TaskJSON | null>(null);
-const editingCategory = ref<{ id: number; title: string } | null>(null); // 用於編輯分類
+const currentTask = ref<TaskWithCompleteness | null>(null);
+const editingCategory = ref<{ id: number; title: string } | null>(null);
 const editingTag = ref<TagUpdateParam | null>(null);
 const newSubtaskTitle = ref('');
 // Form Data
@@ -73,19 +75,17 @@ const newTask = ref<TaskAddParams>({
 
 const manageActiveTab = ref('categories');
 const newCategoryTitle = ref('');
-const newTagForm = ref<TagCreateParam>({ name: '', color: '#409EFF' }); // 預設藍色
+const newTagForm = ref<TagCreateParam>({ name: '', color: '#409EFF' });
 
 const activeCollapseItems = ref<(string | number)[]>(['uncategorized']);
 
 const groupedTasks = computed(() => {
-	const groups: { id: number | string; title: string; tasks: TaskJSON[] }[] = [];
+	const groups: { id: number | string; title: string; tasks: TaskWithCompleteness[] }[] = [];
 
 	const rootTasks = tasks.value.filter((t) => !t.parentTaskId);
 
-	// 1. 處理已分類的任務
 	categories.value.forEach((cat) => {
 		const catTasks = rootTasks.filter((t) => t.categoryId === cat.id);
-		// 即使分類是空的也顯示，這樣才有「文件夾」的感覺
 		groups.push({
 			id: cat.id,
 			title: cat.title,
@@ -93,7 +93,6 @@ const groupedTasks = computed(() => {
 		});
 	});
 
-	// 2. 處理未分類 (Uncategorized)
 	const noCatTasks = rootTasks.filter((t) => !t.categoryId);
 	if (noCatTasks.length > 0) {
 		groups.push({
@@ -141,7 +140,10 @@ const hasSubtasks = (taskId: number): boolean => {
 
 const getTaskProgress = (taskId: number): number => {
 	const subtasks = tasks.value.filter((t) => t.parentTaskId === taskId);
-	if (subtasks.length === 0) return 0;
+	if (subtasks.length === 0) {
+		const task = tasks.value.find((t) => t.id === taskId);
+		return task?.completeness ?? 0;
+	}
 	const completedCount = subtasks.filter((t) => t.completed).length;
 	return Math.round((completedCount / subtasks.length) * 100);
 };
@@ -155,7 +157,7 @@ const loadData = async (): Promise<void> => {
 			fetchCategories(),
 			fetchTags(),
 		]);
-		tasks.value = tasksData;
+		tasks.value = tasksData as TaskWithCompleteness[];
 		categories.value = catsData;
 		tags.value = tagsData;
 	} catch (err) {
@@ -254,7 +256,7 @@ const handleCreateCategory = async (): Promise<void> => {
 	if (!newCategoryTitle.value.trim()) return;
 	const payload: CategoryCreateParam = { title: newCategoryTitle.value.trim() };
 	const created = await createCategory(payload);
-	categories.value = [...categories.value, created]; // 立即加入
+	categories.value = [...categories.value, created];
 	newCategoryTitle.value = '';
 	ElMessage.success('Category added');
 };
@@ -289,8 +291,7 @@ const handleDeleteCategory = async (id: number): Promise<void> => {
 };
 
 // --- Actions: Task Detail & Operations ---
-const openTaskDetail = (task: TaskJSON): void => {
-	// 深拷貝一份資料，避免直接修改列表中的顯示
+const openTaskDetail = (task: TaskWithCompleteness): void => {
 	currentTask.value = JSON.parse(JSON.stringify(task));
 	showTaskDetailModal.value = true;
 };
@@ -314,11 +315,20 @@ const handleSaveTaskDetail = async (): Promise<void> => {
 
 		const updated = await updateTask({ taskId: currentTask.value.id }, updatePayload);
 		console.log('Updated task:', updated);
-		// 立刻套用最新任務，避免畫面同時出現舊/新副本
+
+		if (currentSubtasks.value.length === 0) {
+			const newCompleteness = currentTask.value.completeness ?? 0;
+			await (window as any).electron.ipcRenderer.invoke('tasks:setCompleteness', {
+				taskId: currentTask.value.id,
+				completeness: newCompleteness,
+			});
+			(updated as TaskWithCompleteness).completeness = newCompleteness;
+		}
+
 		tasks.value = tasks.value.map((t) => (t.id === updated.id ? updated : t));
 
 		showTaskDetailModal.value = false;
-		await loadData(); // 最後再跟主進程資料庫同步
+		await loadData();
 		ElMessage.success('Task updated');
 	} catch (err) {
 		ElMessage.error('Failed to update task: ' + err);
@@ -375,10 +385,9 @@ const handleAddSubtask = async (): Promise<void> => {
 			title: newSubtaskTitle.value.trim(),
 			estimateDurationHour: 0.5,
 			priority: 0,
-			// 強制繼承父任務的分類
 			categoryId: currentTask.value.categoryId ?? undefined,
 			tagIds: [],
-			parentTaskId: currentTask.value.id, // 設定父任務 ID
+			parentTaskId: currentTask.value.id,
 		};
 
 		const created = await createTask(payload);
@@ -488,7 +497,10 @@ onMounted(() => {
 
 						<div class="task-content">
 							<div class="task-title">{{ task.title }}</div>
-							<div v-if="hasSubtasks(task.id)" class="task-progress-row">
+							<div
+								v-if="hasSubtasks(task.id) || getTaskProgress(task.id) >= 0"
+								class="task-progress-row"
+							>
 								<el-progress
 									:percentage="getTaskProgress(task.id)"
 									:stroke-width="5"
@@ -809,6 +821,11 @@ onMounted(() => {
 							</el-select>
 						</el-form-item>
 
+						<!-- Manual Progress Slider (Only if no subtasks) -->
+						<el-form-item v-if="currentSubtasks.length === 0" label="Progress">
+							<el-slider v-model="currentTask.completeness" :step="10" show-stops />
+						</el-form-item>
+
 						<el-form-item label="Duration (h)">
 							<el-input-number
 								v-model="currentTask.estimateDurationHour"
@@ -844,11 +861,14 @@ onMounted(() => {
 					<!-- Actions Bar -->
 					<div class="detail-actions">
 						<el-button
-							:type="currentTask.state === 'In Progress' ? 'warning' : 'success'"
-							:icon="currentTask.state === 'In Progress' ? VideoPause : VideoPlay"
+							:type="currentTask.state === 'In Progress' ? 'info' : 'success'"
+							:icon="VideoPlay"
+							:disabled="currentTask.state === 'In Progress' || currentTask.completed"
 							@click="handleToggleStart"
 						>
-							{{ currentTask.state === 'In Progress' ? 'Pause' : 'Start Timer' }}
+							{{
+								currentTask.state === 'In Progress' ? 'In Progress' : 'Start Timer'
+							}}
 						</el-button>
 
 						<el-button type="danger" plain :icon="Delete" @click="handleTaskDelete">
